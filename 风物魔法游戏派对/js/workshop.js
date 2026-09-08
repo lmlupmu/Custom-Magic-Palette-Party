@@ -267,6 +267,21 @@ function setPreviewMode(mode) {
   renderPreview();
 }
 
+/* 茶叶礼盒文案生成：按风物名自动识别茶类并去「信阳」前缀取核心名
+   例：自定义「信阳龙井」→ 龙井 · 绿茶 / 信阳龙井 · 山水之礼 / 信阳龙井礼盒 */
+function teaboxText(item) {
+  const raw = item.name;
+  const isTea = /茶|龙井|毛尖|普洱|观音|碧螺/.test(raw) || item.id === 'tea';
+  const core = raw.replace(/^信阳/, '');
+  const prod = isTea ? (item.id === 'tea' ? '毛尖' : (core.replace(/茶(叶)?$/, '') || '毛尖')) : core;
+  return {
+    brand: isTea ? `${prod} · 绿茶` : (item.custom ? core : `${raw} · ${item.alias}`),
+    sub: `${raw} · 山水之礼`,
+    subEn: isTea ? 'XINYANG TEA · 大别山云雾茶' : 'XINYANG FENGWU · 大别山风物',
+    nameLine: isTea ? `信阳${prod}礼盒` : (item.custom ? `${raw}礼盒` : `${raw} · ${item.alias}`)
+  };
+}
+
 /* 预览用插画 HTML：内置=SVG上色，自定义=图片+风格滤镜 */
 function previewArtHtml(item, style, size) {
   if (item.custom) {
@@ -296,10 +311,12 @@ function renderPreview() {
       <div class="pc-foot">大别山乡土风物 AI 文创 · ${style.name}</div>
     </div>`;
   } else {
+    /* 品牌文案按风物名自动生成：茶类自动识别，去「信阳」前缀取核心名 */
+    const tb = teaboxText(item);
     stage.innerHTML = `
     <div class="teabox" style="background:${style.pal.paper};border-color:${style.pal.deep}">
-      <div class="tb-brand" style="color:${style.pal.deep}">信阳毛尖</div>
-      <div class="tb-sub" style="color:${style.pal.main}">XINYANG MAOJIAN · 大别山云雾茶</div>
+      <div class="tb-brand" style="color:${style.pal.deep}">${tb.brand}</div>
+      <div class="tb-sub" style="color:${style.pal.main}">${tb.sub}</div>
       <div class="tb-art" style="border-color:${style.pal.main}">${item.custom ? previewArtHtml(item, style, 300) : sizedSvg(item.build(style.pal, true), 300, 300)}</div>
       <div class="tb-name" style="color:${style.pal.deep}">${item.name} · ${item.alias}</div>
       <div class="tb-poem" style="color:${style.pal.deep}">${wsPoem.split('\n').slice(0, 2).join('　')}</div>
@@ -393,11 +410,12 @@ async function downloadArtwork() {
     ctx.strokeStyle = pal.deep; ctx.lineWidth = 6; ctx.strokeRect(30, 30, 940, 940);
     ctx.strokeStyle = pal.deep; ctx.lineWidth = 2; ctx.strokeRect(52, 52, 896, 896);
     ctx.textAlign = 'center';
-    // 品牌
+    // 品牌（文案按风物名自动生成，与网页预览一致）
+    const tb2 = teaboxText(item);
     ctx.fillStyle = pal.deep; ctx.font = `90px ${KAI}`;
-    ctx.fillText('信阳毛尖', 500, 170);
+    ctx.fillText(tb2.brand, 500, 170);
     ctx.fillStyle = pal.main; ctx.font = `26px ${KAI}`;
-    ctx.fillText('XINYANG MAOJIAN · 大别山云雾茶', 500, 220);
+    ctx.fillText(tb2.subEn, 500, 220);
     // 圆形插画
     const art = await getArtImage(item, 420);
     ctx.save();
@@ -409,7 +427,7 @@ async function downloadArtwork() {
     ctx.beginPath(); ctx.arc(500, 480, 215, 0, Math.PI * 2); ctx.stroke();
     // 名称与小诗
     ctx.fillStyle = pal.deep; ctx.font = `46px ${KAI}`;
-    ctx.fillText(`${item.name} · ${item.alias}`, 500, 780);
+    ctx.fillText(tb2.nameLine, 500, 780);
     ctx.font = `34px ${KAI}`;
     ctx.fillText(lines[0] + '　' + lines[1], 500, 850);
     // 印章
@@ -419,7 +437,7 @@ async function downloadArtwork() {
   }
 
   const a = document.createElement('a');
-  a.download = `信阳风物_${item.name}_${style.name}_${wsMode === 'postcard' ? '明信片' : '茶叶礼盒'}.png`;
+  a.download = `${wsMode === 'postcard' ? '明信片' : '茶叶礼盒'}_${item.name}_${style.name}.png`;
   a.href = canvas.toDataURL('image/png');
   a.click();
   toast('文创成品已保存到本地');
