@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>风物魔法调色派对 · 大别山乡土风物AI文创小游戏</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ======== 顶部导航 ======== -->
+<header class="topnav">
+  <div class="brand" onclick="goPage('home')">
+    <span class="brand-seal">风物</span>
+    <span class="brand-name">风物魔法调色派对</span>
+  </div>
+  <nav class="nav-tabs">
+    <button class="nav-btn active" data-page="home" onclick="goPage('home')">首页</button>
+    <button class="nav-btn" data-page="game" onclick="goPage('game')">消除小游戏</button>
+    <button class="nav-btn" data-page="workshop" onclick="goPage('workshop')">AI调色工坊</button>
+    <button class="nav-btn" data-page="about" onclick="goPage('about')">关于</button>
+  </nav>
+</header>
+
+<main id="app">
+
+  <!-- ======== 首页 ======== -->
+  <section class="page active" id="page-home">
+    <div class="hero">
+      <div class="hero-deco hero-deco-1" id="heroDeco1"></div>
+      <div class="hero-deco hero-deco-2" id="heroDeco2"></div>
+      <div class="hero-deco hero-deco-3" id="heroDeco3"></div>
+      <p class="hero-tag">AI + 艺术文创应用赛道 · 参赛作品</p>
+      <h1 class="hero-title">风物魔法调色派对</h1>
+      <p class="hero-sub">大别山乡土风物 AI 文创小游戏</p>
+      <p class="hero-intro">
+        玩消除小游戏，解锁信阳本土风物线稿；<br>
+        用 AI 魔法一键调色、生成国风小诗，产出明信片与茶叶礼盒文创作品。
+      </p>
+      <button class="btn-primary btn-big" onclick="goPage('game')">开始创作之旅</button>
+      <div class="hero-chips">
+        <span class="chip">休闲消除</span>
+        <span class="chip">AI 艺术上色</span>
+        <span class="chip">AI 国风小诗</span>
+        <span class="chip">文创成品下载</span>
+      </div>
+    </div>
+
+    <div class="home-flow">
+      <div class="flow-card">
+        <div class="flow-num">壹</div>
+        <h3>消除集风物</h3>
+        <p>点击两张相同风物卡片完成消除，通关解锁黑白线稿与乡土科普。</p>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-card">
+        <div class="flow-num">贰</div>
+        <h3>AI 魔法调色</h3>
+        <p>四套艺术色调任选，AI 自动为线稿上色，并同步生成国风小诗。</p>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-card">
+        <div class="flow-num">叁</div>
+        <h3>文创成品</h3>
+        <p>信阳主题明信片、毛尖茶叶礼盒封面双预览，一键下载保存本地。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======== 消除小游戏 ======== -->
+  <section class="page" id="page-game">
+    <div class="page-head">
+      <h2>消除小游戏 · 风物收集</h2>
+      <p class="page-desc">点击两张<strong>相同</strong>的信阳风物卡片即可消除，全部消除即通关，解锁对应风物黑白线稿。</p>
+    </div>
+
+    <div id="levelSelect" class="level-grid"></div>
+
+    <div id="gameBoard" class="game-board-wrap hidden">
+      <div class="game-status">
+        <button class="btn-ghost" onclick="backToLevels()">← 返回选关</button>
+        <div id="gameLevelName" class="game-level-name"></div>
+        <div class="game-progress">已消除 <span id="gameMatched">0</span> / <span id="gameTotal">0</span>　·　误点 <span id="gameMistakes">0</span> 次</div>
+      </div>
+      <div id="board" class="board"></div>
+    </div>
+  </section>
+
+  <!-- ======== AI 调色工坊 ======== -->
+  <section class="page" id="page-workshop">
+    <div class="page-head">
+      <h2>AI 调色文创工坊</h2>
+      <p class="page-desc">选线稿 → 挑色调 → 点【AI魔法生成】→ 预览明信片 / 茶叶礼盒 → 下载文创成品。</p>
+    </div>
+
+    <div class="workshop">
+      <!-- 左：线稿图库 -->
+      <aside class="ws-gallery">
+        <h3 class="ws-title">① 风物线稿图库</h3>
+        <div id="galleryGrid" class="gallery-grid"></div>
+        <input type="file" id="customUpload" accept="image/*" class="hidden" onchange="onCustomUpload(this)">
+      </aside>
+
+      <!-- 中：预览区 -->
+      <div class="ws-preview">
+        <div id="previewStage" class="preview-stage">
+          <div class="preview-empty" id="previewEmpty">
+            <div class="preview-empty-art" id="previewLineArt"></div>
+            <p id="previewHintText">选择左侧线稿，点击「AI魔法生成」</p>
+          </div>
+          <div id="aiLoading" class="ai-loading hidden">
+            <div class="ai-orb"></div>
+            <p id="aiLoadingText">AI 正在理解线稿…</p>
+          </div>
+          <div id="previewResult" class="preview-result hidden"></div>
+        </div>
+
+        <div id="previewModeBar" class="preview-mode-bar hidden">
+          <button class="mode-btn active" data-mode="postcard" onclick="setPreviewMode('postcard')">明信片预览</button>
+          <button class="mode-btn" data-mode="teabox" onclick="setPreviewMode('teabox')">茶叶礼盒预览</button>
+          <button class="btn-primary" onclick="downloadArtwork()">下载文创成品</button>
+        </div>
+      </div>
+
+      <!-- 右：控制区 -->
+      <aside class="ws-controls">
+        <h3 class="ws-title">② 艺术色调风格</h3>
+        <div id="styleList" class="style-list"></div>
+        <h3 class="ws-title">③ AI 创作</h3>
+        <button class="btn-magic" id="btnMagic" onclick="generateArtwork()">AI 魔法生成</button>
+        <div id="poemBox" class="poem-box hidden">
+          <div class="poem-head"><span class="poem-seal">AI诗人</span><span id="poemStyleName"></span></div>
+          <p id="poemText"></p>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ======== 关于 ======== -->
+  <section class="page" id="page-about">
+    <div class="page-head">
+      <h2>关于本项目</h2>
+      <p class="page-desc">本页面向大赛评审，可直接截图用于参赛文档。</p>
+    </div>
+    <div class="about-grid">
+      <div class="about-card">
+        <h3>项目赛道</h3>
+        <p class="about-highlight">AI + 艺术文创应用</p>
+        <p>大学生 AI 应用创新大赛参赛作品，HTML + JS 纯前端实现，浏览器打开即玩。</p>
+      </div>
+      <div class="about-card">
+        <h3>项目背景</h3>
+        <p>立足<strong>信阳大别山农林本土风物</strong>——信阳毛尖茶叶、山茶花、板栗、茶罐、麦穗、杜鹃花，探索 AI 赋能乡土数字文创，让传统风物以更年轻的方式被看见。</p>
+      </div>
+      <div class="about-card">
+        <h3>功能简介</h3>
+        <p>用户通过休闲消除小游戏解锁本土风物线稿，利用 AI 完成多风格艺术上色（春日青绿 / 秋意赭黄 / 国潮艳彩 / 淡雅水墨），产出<strong>信阳主题明信片、毛尖茶叶礼盒</strong>等文创作品并下载保存。</p>
+      </div>
+      <div class="about-card">
+        <h3>AI 应用说明</h3>
+        <p>AI 承担<strong>艺术上色</strong>与<strong>风物小诗生成</strong>两大创作环节：自动理解线稿结构并匹配风格配色，同步吟咏贴合风物意象的国风短诗，降低乡土文创创作门槛，让人人都是乡土文创设计师。</p>
+      </div>
+    </div>
+    <div class="about-foot">
+      <p>风物魔法调色派对 · 让大别山的风物，开成数字时代的花</p>
+    </div>
+  </section>
+
+</main>
+
+<!-- ======== 通关弹窗 ======== -->
+<div id="winModal" class="modal-mask hidden">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-badge">通关</span>
+      <h3 id="winTitle">恭喜通关！</h3>
+      <div id="winStars" class="win-stars"></div>
+    </div>
+    <div id="winUnlocks" class="win-unlocks"></div>
+    <div class="win-science">
+      <span class="science-tag">信阳风物小科普</span>
+      <p id="winScienceText"></p>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-ghost" id="winNextBtn" onclick="winNext()">下一关</button>
+      <button class="btn-primary" onclick="closeWinAndGo('workshop')">前往 AI 调色工坊</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======== 通用输入弹窗（替代 prompt） ======== -->
+<div id="inputModal" class="modal-mask hidden">
+  <div class="modal modal-sm">
+    <h3 id="inputModalTitle" class="input-modal-title">起个名字</h3>
+    <p class="input-modal-tip" id="inputModalTip"></p>
+    <input id="inputModalField" class="input-modal-field" maxlength="8" placeholder="最多 8 个字">
+    <div class="modal-btns">
+      <button class="btn-ghost" id="inputModalCancel">取消</button>
+      <button class="btn-primary" id="inputModalOk">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======== 通用确认弹窗（替代 confirm） ======== -->
+<div id="confirmModal" class="modal-mask hidden">
+  <div class="modal modal-sm">
+    <h3 class="input-modal-title">提示</h3>
+    <p class="input-modal-tip" id="confirmModalText"></p>
+    <div class="modal-btns">
+      <button class="btn-ghost" id="confirmModalCancel">取消</button>
+      <button class="btn-primary" id="confirmModalOk">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======== 操作提示浮窗 ======== -->
+<div id="hintBox" class="hint-box">
+  <div class="hint-head" onclick="toggleHint()">
+    <span>演示提示</span>
+    <span id="hintToggleIcon">—</span>
+  </div>
+  <div class="hint-body" id="hintBody"></div>
+</div>
+
+<!-- ======== Toast ======== -->
+<div id="toast" class="toast hidden"></div>
+
+<footer class="site-foot">风物魔法调色派对 · AI+艺术文创应用赛道 · 信阳大别山乡土风物数字文创</footer>
+
+<script src="js/data.js"></script>
+<script src="js/game.js"></script>
+<script src="js/workshop.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
