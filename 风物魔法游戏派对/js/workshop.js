@@ -10,6 +10,21 @@ let wsPoem = '';            // AI 生成的小诗
 let wsGenerated = false;    // 是否已生成
 let wsMode = 'postcard';    // 预览模式 postcard | teabox
 
+/* 版式模板：每种预览模式独立记忆当前模板 */
+const WS_TPLS = {
+  postcard: [
+    { id: 'classic', name: '经典', tip: '经典竖诗款：左图右竖排诗 + 邮票框' },
+    { id: 'wide', name: '横版', tip: '横版全图款：上方大幅横图，下方标题与横排小诗' },
+    { id: 'journal', name: '手账', tip: '手账拼贴款：旋转照片贴纸 + 胶带 + 标签标题' }
+  ],
+  teabox: [
+    { id: 'classic', name: '经典', tip: '经典圆图款：品牌大字 + 圆形插画 + 印章' },
+    { id: 'landscape', name: '山水', tip: '山水开窗款：左侧竖排品牌 + 圆角开窗插画' },
+    { id: 'minimal', name: '极简', tip: '极简大字款：超大风物名主视觉 + 大量留白' }
+  ]
+};
+let wsTpl = { postcard: 'classic', teabox: 'classic' };
+
 /* 统一取当前选中项（内置/自定义） */
 function getWsItem() {
   if (wsItemId && wsItemId.startsWith('custom:')) {
@@ -140,6 +155,7 @@ function selectItem(id) {
   markActiveCell();
   document.getElementById('poemBox').classList.add('hidden');
   document.getElementById('previewModeBar').classList.add('hidden');
+  document.getElementById('previewTplBar').classList.add('hidden');
   document.getElementById('previewResult').classList.add('hidden');
   document.getElementById('previewEmpty').classList.remove('hidden');
   renderPreviewLineArt();
@@ -179,10 +195,12 @@ function renderStyles() {
       wsStyleId = s.id;
       wsGenerated = false;
       renderStyles();
+      renderTplBar();
       if (!document.getElementById('previewResult').classList.contains('hidden')) {
         document.getElementById('previewResult').classList.add('hidden');
         document.getElementById('previewEmpty').classList.remove('hidden');
         document.getElementById('previewModeBar').classList.add('hidden');
+        document.getElementById('previewTplBar').classList.add('hidden');
         document.getElementById('poemBox').classList.add('hidden');
       }
     };
@@ -202,6 +220,7 @@ function generateArtwork() {
   document.getElementById('previewEmpty').classList.add('hidden');
   document.getElementById('previewResult').classList.add('hidden');
   document.getElementById('previewModeBar').classList.add('hidden');
+  document.getElementById('previewTplBar').classList.add('hidden');
   document.getElementById('poemBox').classList.add('hidden');
   const loading = document.getElementById('aiLoading');
   const loadingText = document.getElementById('aiLoadingText');
@@ -230,6 +249,8 @@ function finishGenerate() {
   wsGenerated = true;
 
   document.getElementById('previewModeBar').classList.remove('hidden');
+  renderTplBar();
+  document.getElementById('previewTplBar').classList.remove('hidden');
   renderPreview();
 
   // AI 小诗（带打字机效果）
@@ -264,7 +285,32 @@ function typePoem(text) {
 function setPreviewMode(mode) {
   wsMode = mode;
   document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  renderTplBar();
   renderPreview();
+}
+
+/* 模板选择 chip 条：按当前模式渲染，选中态用当前风格 accent 色 */
+function renderTplBar() {
+  const bar = document.getElementById('previewTplBar');
+  if (!bar) return;
+  const accent = getStyle(wsStyleId).pal.accent;
+  bar.innerHTML = '';
+  WS_TPLS[wsMode].forEach(t => {
+    const b = document.createElement('button');
+    b.className = 'tpl-chip' + (wsTpl[wsMode] === t.id ? ' active' : '');
+    b.textContent = t.name;
+    b.title = t.tip;
+    if (wsTpl[wsMode] === t.id) { b.style.background = accent; b.style.borderColor = accent; }
+    b.onclick = () => { wsTpl[wsMode] = t.id; renderTplBar(); renderPreview(); };
+    bar.appendChild(b);
+  });
+}
+
+/* SVG 设为 slice 裁切模式：用于横版/开窗等非方形区域 cover 显示内置线稿 */
+function sliceSvg(svg) {
+  return svg.indexOf('preserveAspectRatio') >= 0
+    ? svg.replace(/preserveAspectRatio="[^"]*"/, 'preserveAspectRatio="xMidYMid slice"')
+    : svg.replace('<svg ', '<svg preserveAspectRatio="xMidYMid slice" ');
 }
 
 /* 茶叶礼盒文案生成：按风物名自动识别茶类并去「信阳」前缀取核心名
@@ -295,33 +341,101 @@ function renderPreview() {
   if (!wsGenerated) return;
   const item = getWsItem();
   const style = getStyle(wsStyleId);
+  const pal = style.pal;
   const art = previewArtHtml(item, style, 420);
   const stage = document.getElementById('previewResult');
   stage.classList.remove('hidden');
+  const tpl = wsTpl[wsMode];
+  const lines = wsPoem.split('\n');
 
   if (wsMode === 'postcard') {
-    stage.innerHTML = `
-    <div class="postcard" style="background:${style.pal.paper}">
-      <div class="pc-art">${art}</div>
-      <div class="pc-right">
-        <div class="pc-stamp" style="border-color:${style.pal.accent};color:${style.pal.accent}">信阳<br>印象</div>
-        <div class="pc-poem" style="color:${style.pal.deep}">${wsPoem.split('\n').map(l => `<span>${l}</span>`).join('')}</div>
-        <div class="pc-title" style="color:${style.pal.deep}">信阳风物 · ${item.name}</div>
-      </div>
-      <div class="pc-foot">大别山乡土风物 AI 文创 · ${style.name}</div>
-    </div>`;
+    if (tpl === 'wide') {
+      /* 横版全图款：上方大幅横图，下方标题 + 横排小诗 + 小印章 */
+      const wideArt = item.custom
+        ? `<div class="pv-custom pv-fill" style="background:${pal.bg}"><img src="${item.img}" style="filter:${CUSTOM_FILTERS[wsStyleId] || 'none'}" alt="${item.name}"></div>`
+        : sizedSvg(sliceSvg(item.build(pal, true)), 640, 352);
+      stage.innerHTML = `
+      <div class="postcard pc-wide" style="background:${pal.paper}">
+        <div class="pcw-art">${wideArt}</div>
+        <div class="pcw-stamp" style="border-color:${pal.accent};color:${pal.accent}">信阳<br>印象</div>
+        <div class="pcw-info">
+          <div class="pcw-title" style="color:${pal.deep}">信阳风物 · ${item.name}</div>
+          <div class="pcw-poem" style="color:${pal.deep}">${lines.slice(0, 2).join('<br>')}</div>
+        </div>
+        <div class="pcw-seal" style="background:${pal.accent}">${item.name.slice(0, 1)}</div>
+        <div class="pc-foot">大别山乡土风物 AI 文创 · ${style.name}</div>
+      </div>`;
+    } else if (tpl === 'journal') {
+      /* 手账拼贴款：纸纹底 + 旋转照片 + 胶带 + 标签标题 + 手写感小诗 */
+      stage.innerHTML = `
+      <div class="postcard pc-journal" style="background-color:${pal.paper}">
+        <div class="pcj-photo">
+          <i class="pcj-tape" style="background:${pal.accent}"></i>
+          ${art}
+        </div>
+        <div class="pcj-label" style="border-color:${pal.accent};color:${pal.deep}">信阳风物 · ${item.name}</div>
+        <div class="pcj-poem" style="color:${pal.deep}">${lines.join('<br>')}</div>
+        <div class="pcj-seal" style="background:${pal.accent}">${item.name.slice(0, 1)}</div>
+        <div class="pc-foot">大别山乡土风物 AI 文创 · ${style.name}</div>
+      </div>`;
+    } else {
+      /* 经典竖诗款（原有版式） */
+      stage.innerHTML = `
+      <div class="postcard" style="background:${pal.paper}">
+        <div class="pc-art">${art}</div>
+        <div class="pc-right">
+          <div class="pc-stamp" style="border-color:${pal.accent};color:${pal.accent}">信阳<br>印象</div>
+          <div class="pc-poem" style="color:${pal.deep}">${wsPoem.split('\n').map(l => `<span>${l}</span>`).join('')}</div>
+          <div class="pc-title" style="color:${pal.deep}">信阳风物 · ${item.name}</div>
+        </div>
+        <div class="pc-foot">大别山乡土风物 AI 文创 · ${style.name}</div>
+      </div>`;
+    }
   } else {
     /* 品牌文案按风物名自动生成：茶类自动识别，去「信阳」前缀取核心名 */
     const tb = teaboxText(item);
-    stage.innerHTML = `
-    <div class="teabox" style="background:${style.pal.paper};border-color:${style.pal.deep}">
-      <div class="tb-brand" style="color:${style.pal.deep}">${tb.brand}</div>
-      <div class="tb-sub" style="color:${style.pal.main}">${tb.sub}</div>
-      <div class="tb-art" style="border-color:${style.pal.main}">${item.custom ? previewArtHtml(item, style, 300) : sizedSvg(item.build(style.pal, true), 300, 300)}</div>
-      <div class="tb-name" style="color:${style.pal.deep}">${item.name} · ${item.alias}</div>
-      <div class="tb-poem" style="color:${style.pal.deep}">${wsPoem.split('\n').slice(0, 2).join('　')}</div>
-      <div class="tb-seal" style="background:${style.pal.accent}">${item.name.slice(0, 1)}</div>
-    </div>`;
+    const core = tb.brand.split(' · ')[0];
+    if (tpl === 'landscape') {
+      /* 山水开窗款：左侧竖排品牌 + 右侧双线描边圆角开窗插画 */
+      const winArt = item.custom
+        ? `<div class="pv-custom pv-fill" style="background:${pal.bg}"><img src="${item.img}" style="filter:${CUSTOM_FILTERS[wsStyleId] || 'none'}" alt="${item.name}"></div>`
+        : sizedSvg(sliceSvg(item.build(pal, true)), 480, 360);
+      stage.innerHTML = `
+      <div class="teabox tb-landscape" style="background:${pal.paper};border-color:${pal.deep}">
+        <div class="tbl-brand" style="color:${pal.deep}">${core}</div>
+        <div class="tbl-main">
+          <div class="tbl-frame" style="border-color:${pal.deep}">
+            <div class="tbl-art" style="border-color:${pal.main}">${winArt}</div>
+          </div>
+          <div class="tbl-name" style="color:${pal.deep}">${tb.nameLine}</div>
+          <div class="tbl-poem" style="color:${pal.deep}">${lines.slice(0, 2).join('　')}</div>
+        </div>
+        <div class="tb-seal" style="background:${pal.accent}">${item.name.slice(0, 1)}</div>
+      </div>`;
+    } else if (tpl === 'minimal') {
+      /* 极简大字款：超大风物名主视觉 + 风格色带 + 底部小圆图 */
+      stage.innerHTML = `
+      <div class="teabox tb-minimal" style="background:${pal.paper};border-color:${pal.deep}">
+        <div class="tbm-band" style="background:${pal.bg}"></div>
+        <div class="tbm-sub" style="color:${pal.main}">${tb.sub}</div>
+        <div class="tbm-big${core.length > 4 ? ' long' : ''}" style="color:${pal.deep}">${core}</div>
+        <div class="tbm-en" style="color:${pal.main}">${tb.subEn}</div>
+        <div class="tbm-art" style="border-color:${pal.main}">${previewArtHtml(item, style, 300)}</div>
+        <div class="tbm-poem" style="color:${pal.deep}">${lines[0]}</div>
+        <div class="tb-seal tbm-seal" style="background:${pal.accent}">${item.name.slice(0, 1)}</div>
+      </div>`;
+    } else {
+      /* 经典圆图款（原有版式） */
+      stage.innerHTML = `
+      <div class="teabox" style="background:${pal.paper};border-color:${pal.deep}">
+        <div class="tb-brand" style="color:${pal.deep}">${tb.brand}</div>
+        <div class="tb-sub" style="color:${pal.main}">${tb.sub}</div>
+        <div class="tb-art" style="border-color:${pal.main}">${item.custom ? previewArtHtml(item, style, 300) : sizedSvg(item.build(style.pal, true), 300, 300)}</div>
+        <div class="tb-name" style="color:${pal.deep}">${item.name} · ${item.alias}</div>
+        <div class="tb-poem" style="color:${pal.deep}">${wsPoem.split('\n').slice(0, 2).join('　')}</div>
+        <div class="tb-seal" style="background:${pal.accent}">${item.name.slice(0, 1)}</div>
+      </div>`;
+    }
   }
 }
 
@@ -366,6 +480,23 @@ function drawCover(ctx, art, x, y, w, h) {
   ctx.restore();
 }
 
+/* canvas 圆角矩形路径 */
+function rr(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/* 非方形区域的插画图（内置线稿用 slice 裁切，自定义图走 drawCover cover） */
+async function getArtImageSlice(item, w, h) {
+  if (item.custom) return { img: await loadImg(item.img), filter: CUSTOM_FILTERS[wsStyleId] || 'none', custom: true };
+  return { img: await loadSvgImg(sliceSvg(item.build(getStyle(wsStyleId).pal, true)), w, h), filter: 'none', custom: false };
+}
+
 async function downloadArtwork() {
   if (!wsGenerated) { toast('请先点击「AI魔法生成」'); return; }
   const item = getWsItem();
@@ -373,67 +504,195 @@ async function downloadArtwork() {
   const pal = style.pal;
   const lines = wsPoem.split('\n');
   const KAI = '"KaiTi","STKaiti","楷体",serif';
+  const tpl = wsTpl[wsMode];
+  const sealChar = item.name.slice(0, 1);
 
   let canvas, ctx;
   if (wsMode === 'postcard') {
     canvas = document.createElement('canvas');
     canvas.width = 1200; canvas.height = 760;
     ctx = canvas.getContext('2d');
-    // 纸面与边框
     ctx.fillStyle = pal.paper; ctx.fillRect(0, 0, 1200, 760);
-    ctx.strokeStyle = pal.main; ctx.lineWidth = 4; ctx.strokeRect(24, 24, 1152, 712);
-    ctx.strokeStyle = pal.main; ctx.lineWidth = 1.5; ctx.strokeRect(40, 40, 1120, 680);
-    // 左侧插画
-    if (item.custom) { ctx.fillStyle = pal.bg; ctx.fillRect(60, 110, 500, 500); }
-    drawCover(ctx, await getArtImage(item, 500), 60, 110, 500, 500);
-    ctx.strokeStyle = pal.main; ctx.lineWidth = 2; ctx.strokeRect(60, 110, 500, 500);
-    // 右侧邮票框
-    ctx.strokeStyle = pal.accent; ctx.lineWidth = 3; ctx.strokeRect(1000, 80, 120, 140);
-    ctx.fillStyle = pal.accent; ctx.font = `34px ${KAI}`; ctx.textAlign = 'center';
-    ctx.fillText('信阳', 1060, 140); ctx.fillText('印象', 1060, 185);
-    // 右侧竖排小诗（从右往左排列）
-    ctx.fillStyle = pal.deep; ctx.font = `38px ${KAI}`;
-    lines.forEach((line, col) => {
-      const x = 880 - col * 76;
-      [...line].forEach((ch, row) => ctx.fillText(ch, x, 180 + row * 52));
-    });
-    // 标题与落款
-    ctx.fillStyle = pal.deep; ctx.font = `44px ${KAI}`; ctx.textAlign = 'left';
-    ctx.fillText(`信阳风物 · ${item.name}`, 620, 640);
-    ctx.font = `24px ${KAI}`; ctx.fillStyle = pal.main;
-    ctx.fillText(`大别山乡土风物 AI 文创 · ${style.name} · 风物魔法调色派对`, 620, 690);
+
+    if (tpl === 'wide') {
+      /* 横版全图款：上方大幅横图约 55%，下方标题 + 横排小诗 + 右下小印章 */
+      if (item.custom) { ctx.fillStyle = pal.bg; ctx.fillRect(40, 40, 1120, 400); }
+      drawCover(ctx, await getArtImageSlice(item, 1120, 400), 40, 40, 1120, 400);
+      ctx.strokeStyle = pal.main; ctx.lineWidth = 2; ctx.strokeRect(40, 40, 1120, 400);
+      // 右上角小邮票框
+      ctx.strokeStyle = pal.accent; ctx.lineWidth = 3; ctx.strokeRect(1048, 62, 88, 102);
+      ctx.fillStyle = pal.accent; ctx.font = `26px ${KAI}`; ctx.textAlign = 'center';
+      ctx.fillText('信阳', 1092, 104); ctx.fillText('印象', 1092, 140);
+      // 左对齐标题 + 横排小诗两句
+      ctx.textAlign = 'left'; ctx.fillStyle = pal.deep;
+      ctx.font = `46px ${KAI}`;
+      ctx.fillText(`信阳风物 · ${item.name}`, 70, 550);
+      ctx.font = `30px ${KAI}`;
+      lines.slice(0, 2).forEach((l, i) => ctx.fillText(l, 70, 610 + i * 46));
+      // 右下小印章
+      ctx.fillStyle = pal.accent; ctx.fillRect(1050, 570, 70, 70);
+      ctx.fillStyle = '#FFF'; ctx.font = `42px ${KAI}`; ctx.textAlign = 'center';
+      ctx.fillText(sealChar, 1085, 620);
+      // 落款
+      ctx.fillStyle = pal.main; ctx.font = `22px ${KAI}`; ctx.textAlign = 'left';
+      ctx.fillText(`大别山乡土风物 AI 文创 · ${style.name} · 风物魔法调色派对`, 70, 715);
+    } else if (tpl === 'journal') {
+      /* 手账拼贴款：纸纹底 + 旋转白框照片 + 胶带 + 标签标题 + 横排小诗 */
+      // 纸纹底点
+      ctx.fillStyle = pal.main; ctx.globalAlpha = 0.07;
+      for (let dx = 26; dx < 1200; dx += 34) {
+        for (let dy = 26; dy < 760; dy += 34) { ctx.beginPath(); ctx.arc(dx, dy, 1.6, 0, Math.PI * 2); ctx.fill(); }
+      }
+      ctx.globalAlpha = 1;
+      // 旋转照片（白色相框边）
+      ctx.save();
+      ctx.translate(400, 390); ctx.rotate(-2 * Math.PI / 180);
+      ctx.fillStyle = '#FFF'; ctx.fillRect(-290, -305, 580, 610);
+      ctx.strokeStyle = pal.main; ctx.lineWidth = 2; ctx.strokeRect(-290, -305, 580, 610);
+      if (item.custom) { ctx.fillStyle = pal.bg; ctx.fillRect(-258, -272, 516, 516); }
+      drawCover(ctx, await getArtImage(item, 516), -258, -272, 516, 516);
+      // 顶部半透明胶带（accent 50%）
+      ctx.globalAlpha = 0.5; ctx.fillStyle = pal.accent;
+      ctx.fillRect(-100, -330, 200, 48);
+      ctx.globalAlpha = 1;
+      ctx.restore();
+      // 标签贴纸标题（accent 描边胶囊）
+      ctx.strokeStyle = pal.accent; ctx.lineWidth = 2.5;
+      rr(ctx, 770, 90, 360, 74, 37); ctx.stroke();
+      ctx.fillStyle = pal.deep; ctx.font = `34px ${KAI}`; ctx.textAlign = 'center';
+      ctx.fillText(`信阳风物 · ${item.name}`, 950, 140);
+      // 右下横排小诗（楷体手写感）
+      ctx.font = `32px ${KAI}`; ctx.textAlign = 'left'; ctx.fillStyle = pal.deep;
+      lines.forEach((l, i) => ctx.fillText(l, 770, 460 + i * 54));
+      // 小印章
+      ctx.fillStyle = pal.accent; ctx.fillRect(1048, 630, 64, 64);
+      ctx.fillStyle = '#FFF'; ctx.font = `40px ${KAI}`; ctx.textAlign = 'center';
+      ctx.fillText(sealChar, 1080, 677);
+      ctx.fillStyle = pal.main; ctx.font = `20px ${KAI}`; ctx.textAlign = 'left';
+      ctx.fillText(`大别山乡土风物 AI 文创 · ${style.name} · 风物魔法调色派对`, 60, 722);
+    } else {
+      /* 经典竖诗款（原有版式） */
+      ctx.strokeStyle = pal.main; ctx.lineWidth = 4; ctx.strokeRect(24, 24, 1152, 712);
+      ctx.strokeStyle = pal.main; ctx.lineWidth = 1.5; ctx.strokeRect(40, 40, 1120, 680);
+      // 左侧插画
+      if (item.custom) { ctx.fillStyle = pal.bg; ctx.fillRect(60, 110, 500, 500); }
+      drawCover(ctx, await getArtImage(item, 500), 60, 110, 500, 500);
+      ctx.strokeStyle = pal.main; ctx.lineWidth = 2; ctx.strokeRect(60, 110, 500, 500);
+      // 右侧邮票框
+      ctx.strokeStyle = pal.accent; ctx.lineWidth = 3; ctx.strokeRect(1000, 80, 120, 140);
+      ctx.fillStyle = pal.accent; ctx.font = `34px ${KAI}`; ctx.textAlign = 'center';
+      ctx.fillText('信阳', 1060, 140); ctx.fillText('印象', 1060, 185);
+      // 右侧竖排小诗（从右往左排列）
+      ctx.fillStyle = pal.deep; ctx.font = `38px ${KAI}`;
+      lines.forEach((line, col) => {
+        const x = 880 - col * 76;
+        [...line].forEach((ch, row) => ctx.fillText(ch, x, 180 + row * 52));
+      });
+      // 标题与落款
+      ctx.fillStyle = pal.deep; ctx.font = `44px ${KAI}`; ctx.textAlign = 'left';
+      ctx.fillText(`信阳风物 · ${item.name}`, 620, 640);
+      ctx.font = `24px ${KAI}`; ctx.fillStyle = pal.main;
+      ctx.fillText(`大别山乡土风物 AI 文创 · ${style.name} · 风物魔法调色派对`, 620, 690);
+    }
   } else {
     canvas = document.createElement('canvas');
     canvas.width = 1000; canvas.height = 1000;
     ctx = canvas.getContext('2d');
     ctx.fillStyle = pal.paper; ctx.fillRect(0, 0, 1000, 1000);
-    ctx.strokeStyle = pal.deep; ctx.lineWidth = 6; ctx.strokeRect(30, 30, 940, 940);
-    ctx.strokeStyle = pal.deep; ctx.lineWidth = 2; ctx.strokeRect(52, 52, 896, 896);
-    ctx.textAlign = 'center';
-    // 品牌（文案按风物名自动生成，与网页预览一致）
     const tb2 = teaboxText(item);
-    ctx.fillStyle = pal.deep; ctx.font = `90px ${KAI}`;
-    ctx.fillText(tb2.brand, 500, 170);
-    ctx.fillStyle = pal.main; ctx.font = `26px ${KAI}`;
-    ctx.fillText(tb2.subEn, 500, 220);
-    // 圆形插画
-    const art = await getArtImage(item, 420);
-    ctx.save();
-    ctx.beginPath(); ctx.arc(500, 480, 215, 0, Math.PI * 2); ctx.clip();
-    if (item.custom) { ctx.fillStyle = pal.bg; ctx.fillRect(285, 265, 430, 430); }
-    drawCover(ctx, art, 290, 270, 420, 420);
-    ctx.restore();
-    ctx.strokeStyle = pal.main; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.arc(500, 480, 215, 0, Math.PI * 2); ctx.stroke();
-    // 名称与小诗
-    ctx.fillStyle = pal.deep; ctx.font = `46px ${KAI}`;
-    ctx.fillText(tb2.nameLine, 500, 780);
-    ctx.font = `34px ${KAI}`;
-    ctx.fillText(lines[0] + '　' + lines[1], 500, 850);
-    // 印章
-    ctx.fillStyle = pal.accent; ctx.fillRect(790, 800, 84, 84);
-    ctx.fillStyle = '#FFF'; ctx.font = `52px ${KAI}`;
-    ctx.fillText(item.name.slice(0, 1), 832, 860);
+    const core = tb2.brand.split(' · ')[0];
+
+    if (tpl === 'landscape') {
+      /* 山水开窗款：左侧竖排品牌大字 + 右侧双线描边圆角开窗插画 */
+      ctx.strokeStyle = pal.deep; ctx.lineWidth = 6; ctx.strokeRect(30, 30, 940, 940);
+      ctx.strokeStyle = pal.deep; ctx.lineWidth = 2; ctx.strokeRect(52, 52, 896, 896);
+      // 左侧竖排品牌
+      ctx.fillStyle = pal.deep; ctx.font = `72px ${KAI}`; ctx.textAlign = 'center';
+      [...core].forEach((ch, i) => ctx.fillText(ch, 132, 210 + i * 86));
+      ctx.fillStyle = pal.main; ctx.font = `22px ${KAI}`;
+      ctx.fillText('山水之礼', 132, 900);
+      // 右侧开窗（双线描边）
+      rr(ctx, 230, 150, 660, 480, 28); ctx.strokeStyle = pal.deep; ctx.lineWidth = 3.5; ctx.stroke();
+      rr(ctx, 244, 164, 632, 452, 20); ctx.strokeStyle = pal.main; ctx.lineWidth = 1.5; ctx.stroke();
+      // 窗内插画
+      ctx.save();
+      rr(ctx, 258, 178, 604, 424, 14); ctx.clip();
+      if (item.custom) { ctx.fillStyle = pal.bg; ctx.fillRect(258, 178, 604, 424); }
+      drawCover(ctx, await getArtImageSlice(item, 604, 424), 258, 178, 604, 424);
+      ctx.restore();
+      // 窗下名称与小诗
+      ctx.fillStyle = pal.deep; ctx.font = `44px ${KAI}`; ctx.textAlign = 'center';
+      ctx.fillText(tb2.nameLine, 560, 735);
+      ctx.font = `32px ${KAI}`;
+      ctx.fillText(lines[0] + '　' + lines[1], 560, 805);
+      ctx.fillStyle = pal.main; ctx.font = `22px ${KAI}`;
+      ctx.fillText(tb2.subEn, 560, 855);
+      // 印章右下角
+      ctx.fillStyle = pal.accent; ctx.fillRect(830, 850, 70, 70);
+      ctx.fillStyle = '#FFF'; ctx.font = `42px ${KAI}`;
+      ctx.fillText(sealChar, 865, 899);
+    } else if (tpl === 'minimal') {
+      /* 极简大字款：超大风物名主视觉 + 风格色带 + 底部小圆图 */
+      ctx.strokeStyle = pal.deep; ctx.lineWidth = 2; ctx.strokeRect(36, 36, 928, 928);
+      // 顶部风格色带
+      ctx.fillStyle = pal.bg; ctx.fillRect(36, 36, 928, 90);
+      ctx.fillStyle = pal.accent; ctx.fillRect(36, 126, 928, 6);
+      // 副标
+      ctx.textAlign = 'center';
+      ctx.fillStyle = pal.main; ctx.font = `26px ${KAI}`;
+      ctx.fillText(tb2.sub, 500, 290);
+      // 超大核心名（逐字拉开间距）
+      const bigSize = core.length <= 2 ? 180 : core.length <= 4 ? 130 : 92;
+      ctx.fillStyle = pal.deep; ctx.font = `${bigSize}px ${KAI}`;
+      const gap = bigSize * 1.14;
+      const totalW = gap * (core.length - 1);
+      [...core].forEach((ch, i) => ctx.fillText(ch, 500 - totalW / 2 + i * gap, 300 + bigSize));
+      // 英文小副标
+      ctx.fillStyle = pal.main; ctx.font = `22px ${KAI}`;
+      ctx.fillText(tb2.subEn, 500, 340 + bigSize);
+      // 底部小圆图
+      const artM = await getArtImage(item, 260);
+      ctx.save();
+      ctx.beginPath(); ctx.arc(500, 770, 120, 0, Math.PI * 2); ctx.clip();
+      if (item.custom) { ctx.fillStyle = pal.bg; ctx.fillRect(380, 650, 240, 240); }
+      drawCover(ctx, artM, 380, 650, 240, 240);
+      ctx.restore();
+      ctx.strokeStyle = pal.main; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(500, 770, 120, 0, Math.PI * 2); ctx.stroke();
+      // 小诗一行与小印章
+      ctx.fillStyle = pal.deep; ctx.font = `26px ${KAI}`;
+      ctx.fillText(lines[0], 500, 945);
+      ctx.fillStyle = pal.accent; ctx.fillRect(860, 880, 52, 52);
+      ctx.fillStyle = '#FFF'; ctx.font = `32px ${KAI}`;
+      ctx.fillText(sealChar, 886, 916);
+    } else {
+      /* 经典圆图款（原有版式） */
+      ctx.strokeStyle = pal.deep; ctx.lineWidth = 6; ctx.strokeRect(30, 30, 940, 940);
+      ctx.strokeStyle = pal.deep; ctx.lineWidth = 2; ctx.strokeRect(52, 52, 896, 896);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = pal.deep; ctx.font = `90px ${KAI}`;
+      ctx.fillText(tb2.brand, 500, 170);
+      ctx.fillStyle = pal.main; ctx.font = `26px ${KAI}`;
+      ctx.fillText(tb2.subEn, 500, 220);
+      // 圆形插画
+      const art = await getArtImage(item, 420);
+      ctx.save();
+      ctx.beginPath(); ctx.arc(500, 480, 215, 0, Math.PI * 2); ctx.clip();
+      if (item.custom) { ctx.fillStyle = pal.bg; ctx.fillRect(285, 265, 430, 430); }
+      drawCover(ctx, art, 290, 270, 420, 420);
+      ctx.restore();
+      ctx.strokeStyle = pal.main; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(500, 480, 215, 0, Math.PI * 2); ctx.stroke();
+      // 名称与小诗
+      ctx.fillStyle = pal.deep; ctx.font = `46px ${KAI}`;
+      ctx.fillText(tb2.nameLine, 500, 780);
+      ctx.font = `34px ${KAI}`;
+      ctx.fillText(lines[0] + '　' + lines[1], 500, 850);
+      // 印章
+      ctx.fillStyle = pal.accent; ctx.fillRect(790, 800, 84, 84);
+      ctx.fillStyle = '#FFF'; ctx.font = `52px ${KAI}`;
+      ctx.fillText(item.name.slice(0, 1), 832, 860);
+    }
   }
 
   const a = document.createElement('a');

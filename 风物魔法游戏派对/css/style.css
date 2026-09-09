@@ -326,6 +326,107 @@ main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 60px; }
   box-shadow: 2px 2px 0 rgba(51, 65, 60, .25);
 }
 
+/* 版式模板选择 chip */
+.preview-tpl-bar { display: flex; gap: 8px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+.tpl-chip {
+  border: 1.5px solid var(--green-soft); background: #fff; color: var(--green-deep);
+  font-family: inherit; font-size: 13px; letter-spacing: 2px;
+  padding: 5px 16px; border-radius: 999px; cursor: pointer; transition: all .2s;
+}
+.tpl-chip:hover { border-color: var(--green); }
+.tpl-chip.active { color: #fff; }
+
+/* 明信片 · 横版全图款 */
+.pc-wide { flex-direction: column; align-items: stretch; gap: 0; padding: 3.5%; }
+.pcw-art { width: 100%; height: 55%; overflow: hidden; border-radius: 4px; }
+.pcw-art svg { width: 100%; height: 100%; display: block; }
+.pv-fill { height: 100%; aspect-ratio: auto; border-radius: 0; }
+.pcw-stamp {
+  position: absolute; top: 5.5%; right: 5%;
+  width: 40px; height: 48px; border: 2px solid; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; line-height: 1.25; text-align: center;
+  background: rgba(255, 255, 255, .72);
+}
+.pcw-info { padding: 3.5% 2% 0; }
+.pcw-title { font-size: clamp(15px, 2.4vw, 22px); letter-spacing: 3px; }
+.pcw-poem { margin-top: 6px; font-size: clamp(11px, 1.7vw, 15px); letter-spacing: 2px; line-height: 1.7; }
+.pcw-seal {
+  position: absolute; bottom: 5%; right: 5%;
+  width: 36px; height: 36px; border-radius: 5px; color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 19px;
+  box-shadow: 2px 2px 0 rgba(51, 65, 60, .25);
+}
+
+/* 明信片 · 手账拼贴款 */
+.pc-journal { display: block; padding: 0; }
+.pc-journal::before {
+  content: ''; position: absolute; inset: 0; border-radius: 8px; pointer-events: none;
+  background-image: radial-gradient(rgba(51, 65, 60, .07) 1px, transparent 1.5px);
+  background-size: 16px 16px;
+}
+.pcj-photo {
+  position: absolute; top: 8%; left: 7%; width: 46%;
+  background: #fff; padding: 3.5% 3.5% 9%;
+  transform: rotate(-2deg);
+  box-shadow: 0 8px 18px rgba(51, 65, 60, .22);
+}
+.pcj-photo svg { width: 100%; height: auto; display: block; }
+.pcj-photo .pv-custom { border-radius: 0; }
+.pcj-tape {
+  position: absolute; top: -4%; left: 50%; transform: translateX(-50%) rotate(-1deg);
+  width: 44%; height: 16px; opacity: .5; border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(51, 65, 60, .15);
+}
+.pcj-label {
+  position: absolute; top: 9%; right: 7%;
+  border: 1.5px solid; border-radius: 999px; padding: 6px 16px;
+  font-size: clamp(12px, 1.9vw, 17px); letter-spacing: 2px;
+  background: rgba(255, 255, 255, .78);
+}
+.pcj-poem {
+  position: absolute; right: 9%; bottom: 14%; text-align: left;
+  font-family: "KaiTi", "STKaiti", "楷体", serif;
+  font-size: clamp(12px, 2vw, 18px); letter-spacing: 3px; line-height: 1.9;
+  transform: rotate(-.6deg);
+}
+.pcj-seal {
+  position: absolute; bottom: 6%; right: 6%;
+  width: 34px; height: 34px; border-radius: 5px; color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 18px;
+  box-shadow: 2px 2px 0 rgba(51, 65, 60, .25);
+}
+
+/* 茶叶礼盒 · 山水开窗款 */
+.tb-landscape { flex-direction: row; align-items: stretch; justify-content: flex-start; padding: 5%; gap: 5%; }
+.tbl-brand {
+  writing-mode: vertical-rl; font-family: "KaiTi", "STKaiti", "楷体", serif;
+  font-size: clamp(24px, 5vw, 46px); letter-spacing: 10px; padding: 2% 0;
+  max-height: 92%; overflow: hidden; align-self: center;
+}
+.tbl-main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; }
+.tbl-frame { width: 100%; border: 2.5px solid; border-radius: 18px; padding: 6px; }
+.tbl-art { width: 100%; aspect-ratio: 4 / 3; border: 1px solid; border-radius: 12px; overflow: hidden; }
+.tbl-art svg { width: 100%; height: 100%; display: block; }
+.tbl-name { margin-top: 4.5%; font-size: clamp(14px, 2.4vw, 21px); letter-spacing: 3px; }
+.tbl-poem { margin-top: 6px; font-size: clamp(10px, 1.6vw, 14px); letter-spacing: 2px; }
+
+/* 茶叶礼盒 · 极简大字款 */
+.tb-minimal { justify-content: flex-start; padding: 0 6% 5%; border-width: 2px; border-style: solid; }
+.tbm-band { position: absolute; top: 0; left: 0; right: 0; height: 9%; border-radius: 6px 6px 0 0; }
+.tbm-sub { margin-top: 17%; font-size: clamp(10px, 1.6vw, 14px); letter-spacing: 4px; }
+.tbm-big {
+  font-family: "KaiTi", "STKaiti", "楷体", serif;
+  font-size: clamp(52px, 15vw, 108px); letter-spacing: 8px; line-height: 1.15; margin-top: 2%;
+  white-space: nowrap;
+}
+.tbm-big.long { font-size: clamp(30px, 8.5vw, 60px); letter-spacing: 4px; }
+.tbm-en { margin-top: 2%; font-size: clamp(9px, 1.3vw, 12px); letter-spacing: 2px; }
+.tbm-art { width: 26%; margin-top: 5%; border-radius: 50%; border: 2px solid; overflow: hidden; }
+.tbm-art svg { width: 100%; height: auto; display: block; }
+.tbm-poem { margin-top: 5%; font-size: clamp(10px, 1.6vw, 14px); letter-spacing: 2px; }
+.tbm-seal { width: 30px; height: 30px; font-size: 16px; bottom: 4%; right: 5%; }
+
 /* 风格卡 & 魔法按钮 */
 .style-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
 .style-card {
