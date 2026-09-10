@@ -3,13 +3,14 @@
  * ===================================================== */
 
 const PAGE_HINTS = {
-  home: '点击「开始创作之旅」进入消除关卡，收集信阳风物线稿；也可直接进入「AI调色工坊」体验创作。',
+  home: '点击「开始创作之旅」进入消除关卡，收集信阳风物线稿；也可直接进入「AI调色工坊」体验创作。点右上角 🔊 按钮可随时开关音效。',
   game: '玩法：点击两张<strong>相同</strong>的风物卡片即可消除，全部消除通关，解锁对应黑白线稿与乡土科普。',
   workshop: '四步创作：① 左侧选线稿（也可点「＋上传我的风物」传自己的图片并起名）→ ② 挑色调 → ③ 点「AI魔法生成」，AI 会按风物名字赋诗 → ④ 切换预览并下载。生成后还可在预览下方切换版式模板（明信片：经典/横版/手账，礼盒：经典/山水/极简），下载会按当前选中的模板导出 PNG；点「四风格对比」可把同一风物的四套色调效果拼成 2×2 对比图一键下载。',
   about: '本页面向大赛评审：项目赛道、背景、功能与 AI 应用说明，页面整洁，可直接截图用于参赛文档。页面底部有「演示工具」：可一键解锁全部关卡与线稿，或重置全部本地存档恢复初始状态。'
 };
 
 function goPage(page) {
+  SoundFX.click();
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === page));
@@ -46,7 +47,7 @@ function showNameDialog(title, tip, def) {
     };
     const okBtn = document.getElementById('inputModalOk');
     const cancelBtn = document.getElementById('inputModalCancel');
-    okBtn.onclick = () => done(field.value.trim().slice(0, 8));
+    okBtn.onclick = () => { SoundFX.click(); done(field.value.trim().slice(0, 8)); };
     cancelBtn.onclick = () => done(null);
     field.onkeydown = e => {
       if (e.key === 'Enter') done(field.value.trim().slice(0, 8));
@@ -67,9 +68,23 @@ function showConfirmDialog(text) {
     };
     const okBtn = document.getElementById('confirmModalOk');
     const cancelBtn = document.getElementById('confirmModalCancel');
-    okBtn.onclick = () => done(true);
+    okBtn.onclick = () => { SoundFX.click(); done(true); };
     cancelBtn.onclick = () => done(false);
   });
+}
+
+/* ---------- 音效开关 ---------- */
+function updateSoundBtn() {
+  const on = SoundFX.enabled;
+  document.getElementById('soundIconOn').style.display = on ? '' : 'none';
+  document.getElementById('soundIconOff').style.display = on ? 'none' : '';
+  document.getElementById('soundBtn').classList.toggle('off', !on);
+}
+
+function toggleSound() {
+  const on = SoundFX.toggle();
+  updateSoundBtn();
+  toast(on ? '音效已开启' : '音效已关闭');
 }
 
 /* ---------- Toast ---------- */
@@ -129,6 +144,7 @@ if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
   document.getElementById('heroDeco3').innerHTML = sizedSvg(deco3.build(deco3.icon, false), 100, 100);
 
   document.getElementById('hintBody').innerHTML = PAGE_HINTS.home;
+  updateSoundBtn();
   renderLevelSelect();
   renderStyles();
   renderGallery();

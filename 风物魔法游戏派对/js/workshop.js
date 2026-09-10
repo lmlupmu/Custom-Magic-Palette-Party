@@ -159,6 +159,7 @@ function selectItem(id) {
   document.getElementById('previewResult').classList.add('hidden');
   document.getElementById('previewEmpty').classList.remove('hidden');
   renderPreviewLineArt();
+  SoundFX.click();
 }
 
 function renderPreviewLineArt() {
@@ -194,6 +195,7 @@ function renderStyles() {
     el.onclick = () => {
       wsStyleId = s.id;
       wsGenerated = false;
+      SoundFX.click();
       renderStyles();
       renderTplBar();
       if (!document.getElementById('previewResult').classList.contains('hidden')) {
@@ -260,6 +262,7 @@ function finishGenerate() {
     ? `AI 分析「${item.name}」赋诗 · ${style.name}`
     : `为「${item.name}」赋诗 · ${style.name}`;
   typePoem(wsPoem);
+  SoundFX.generate();
   toast('AI 文创生成完成，可切换预览模式或下载保存');
 }
 
@@ -301,7 +304,7 @@ function renderTplBar() {
     b.textContent = t.name;
     b.title = t.tip;
     if (wsTpl[wsMode] === t.id) { b.style.background = accent; b.style.borderColor = accent; }
-    b.onclick = () => { wsTpl[wsMode] = t.id; renderTplBar(); renderPreview(); };
+    b.onclick = () => { wsTpl[wsMode] = t.id; SoundFX.click(); renderTplBar(); renderPreview(); };
     bar.appendChild(b);
   });
 }

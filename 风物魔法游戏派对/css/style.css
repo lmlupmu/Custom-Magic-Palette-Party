@@ -52,6 +52,14 @@ strong { color: var(--green-deep); }
 }
 .nav-btn:hover { background: var(--green-mist); }
 .nav-btn.active { background: var(--green); color: #fff; box-shadow: var(--shadow); }
+.sound-btn {
+  border: none; background: transparent; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; border-radius: 999px;
+  color: var(--green-deep); transition: all .25s;
+}
+.sound-btn:hover { background: var(--green-mist); transform: scale(1.08); }
+.sound-btn.off { color: #9aa8a2; }
 
 main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 60px; }
 .page { display: none; animation: fadeIn .4s; }

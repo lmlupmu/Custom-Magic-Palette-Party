@@ -95,11 +95,13 @@ function onCardClick(card) {
   if (!selectedCard) {
     selectedCard = card;
     card.el.classList.add('selected');
+    SoundFX.flip();
     return;
   }
   const first = selectedCard;
   first.el.classList.remove('selected');
   selectedCard = null;
+  SoundFX.flip();
 
   if (first.itemId === card.itemId) {    // 配对成功
     first.matched = card.matched = true;
@@ -107,9 +109,11 @@ function onCardClick(card) {
     card.el.classList.add('matched');
     matchedPairs++;
     document.getElementById('gameMatched').textContent = String(matchedPairs);
+    SoundFX.match();
     if (matchedPairs === totalPairs) setTimeout(showWin, 500);
   } else {                                // 配对失败，误点+1，轻摇提示
     mistakes++;
+    SoundFX.miss();
     document.getElementById('gameMistakes').textContent = String(mistakes);
     first.el.classList.add('shake');
     card.el.classList.add('shake');
@@ -153,6 +157,8 @@ function showWin() {
   document.getElementById('winScienceText').textContent = feature.science;
   document.getElementById('winNextBtn').style.display = gameLevel < LEVELS.length - 1 ? '' : 'none';
   document.getElementById('winModal').classList.remove('hidden');
+  SoundFX.clear();
+  SoundFX.unlock();
 }
 
 function winNext() {

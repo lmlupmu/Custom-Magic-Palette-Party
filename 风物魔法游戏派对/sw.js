@@ -3,7 +3,7 @@
  * 版本升级时修改 CACHE_VERSION 即可让旧缓存失效
  * ===================================================== */
 
-const CACHE_VERSION = 'fengwu-party-v1';
+const CACHE_VERSION = 'fengwu-party-v2';
 
 /* 预缓存清单：应用外壳全部静态资源 */
 const PRECACHE = [
@@ -13,6 +13,7 @@ const PRECACHE = [
   'js/data.js',
   'js/game.js',
   'js/workshop.js',
+  'js/audio.js',
   'js/main.js',
   'manifest.json',
   'favicon.svg'
