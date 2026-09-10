@@ -324,7 +324,7 @@ function teaboxText(item) {
     brand: isTea ? `${prod} · 绿茶` : (item.custom ? core : `${raw} · ${item.alias}`),
     sub: `${raw} · 山水之礼`,
     subEn: isTea ? 'XINYANG TEA · 大别山云雾茶' : 'XINYANG FENGWU · 大别山风物',
-    nameLine: isTea ? `信阳${prod}礼盒` : (item.custom ? `${raw}礼盒` : `${raw} · ${item.alias}`)
+    nameLine: isTea ? `${prod}礼盒` : (item.custom ? `${raw}礼盒` : `${raw} · ${item.alias}`)
   };
 }
 
