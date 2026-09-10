@@ -5,8 +5,8 @@
 const PAGE_HINTS = {
   home: '点击「开始创作之旅」进入消除关卡，收集信阳风物线稿；也可直接进入「AI调色工坊」体验创作。',
   game: '玩法：点击两张<strong>相同</strong>的风物卡片即可消除，全部消除通关，解锁对应黑白线稿与乡土科普。',
-  workshop: '四步创作：① 左侧选线稿（也可点「＋上传我的风物」传自己的图片并起名）→ ② 挑色调 → ③ 点「AI魔法生成」，AI 会按风物名字赋诗 → ④ 切换预览并下载。生成后还可在预览下方切换版式模板（明信片：经典/横版/手账，礼盒：经典/山水/极简），下载会按当前选中的模板导出 PNG。',
-  about: '本页面向大赛评审：项目赛道、背景、功能与 AI 应用说明，页面整洁，可直接截图用于参赛文档。'
+  workshop: '四步创作：① 左侧选线稿（也可点「＋上传我的风物」传自己的图片并起名）→ ② 挑色调 → ③ 点「AI魔法生成」，AI 会按风物名字赋诗 → ④ 切换预览并下载。生成后还可在预览下方切换版式模板（明信片：经典/横版/手账，礼盒：经典/山水/极简），下载会按当前选中的模板导出 PNG；点「四风格对比」可把同一风物的四套色调效果拼成 2×2 对比图一键下载。',
+  about: '本页面向大赛评审：项目赛道、背景、功能与 AI 应用说明，页面整洁，可直接截图用于参赛文档。页面底部有「演示工具」：可一键解锁全部关卡与线稿，或重置全部本地存档恢复初始状态。'
 };
 
 function goPage(page) {
@@ -86,8 +86,42 @@ function toast(msg) {
   }, 2200);
 }
 
+/* ---------- 演示模式 / 重置存档 ---------- */
+/* 一键解锁全部风物线稿与关卡；仅尚未全解锁时才写入。fromParam=true 表示 URL 参数触发（已全解锁时不打扰） */
+function enableDemoMode(fromParam) {
+  const allIds = ITEMS.map(i => i.id);
+  const allLv = LEVELS.map((_, i) => i);
+  const full = allIds.every(id => getUnlocked().includes(id)) && allLv.every(i => getLevelsDone().includes(i));
+  if (full) {
+    if (!fromParam) toast('已是全部解锁状态，可直接体验完整内容');
+    return;
+  }
+  localStorage.setItem('wm_unlocked', JSON.stringify(allIds));
+  localStorage.setItem('wm_levels', JSON.stringify(allLv));
+  renderLevelSelect();
+  renderGallery();
+  toast('演示模式：全部关卡与线稿已解锁');
+}
+
+async function resetAllSaves() {
+  if (!(await showConfirmDialog('确定重置全部存档吗？将清除线稿解锁、关卡进度、星级记录与已上传的自定义风物，恢复到初始状态。'))) return;
+  ['wm_unlocked', 'wm_levels', 'wm_stars', 'wm_custom'].forEach(k => localStorage.removeItem(k));
+  toast('存档已重置，即将刷新页面');
+  setTimeout(() => { location.href = location.pathname; }, 700);
+}
+
+/* ---------- PWA：注册 Service Worker（仅 http/https 环境，file:// 跳过） ---------- */
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* 离线支持不可用时静默 */ });
+  });
+}
+
 /* ---------- 初始化 ---------- */
 (function init() {
+  // 演示模式：URL 带 ?demo=1 时一键全解锁（仅首次写入）
+  if (new URLSearchParams(location.search).get('demo') === '1') enableDemoMode(true);
+
   // 首页漂浮装饰
   const deco1 = getItem('tea'), deco2 = getItem('camellia'), deco3 = getItem('azalea');
   document.getElementById('heroDeco1').innerHTML = sizedSvg(deco1.build(deco1.icon, false), 110, 110);

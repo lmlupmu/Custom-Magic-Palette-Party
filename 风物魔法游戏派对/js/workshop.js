@@ -458,10 +458,11 @@ function loadImg(src) {
   });
 }
 
-/* 取当前项的 canvas 用图（内置=SVG图，自定义=带滤镜图片） */
-async function getArtImage(item, size) {
-  if (item.custom) return { img: await loadImg(item.img), filter: CUSTOM_FILTERS[wsStyleId] || 'none', custom: true };
-  return { img: await loadSvgImg(item.build(getStyle(wsStyleId).pal, true), size, size), filter: 'none', custom: false };
+/* 取某项的 canvas 用图（内置=按指定风格上色的SVG图，自定义=带该风格滤镜的图片）；styleId 缺省取当前选中色调 */
+async function getArtImage(item, size, styleId) {
+  const sid = styleId || wsStyleId;
+  if (item.custom) return { img: await loadImg(item.img), filter: CUSTOM_FILTERS[sid] || 'none', custom: true };
+  return { img: await loadSvgImg(item.build(getStyle(sid).pal, true), size, size), filter: 'none', custom: false };
 }
 
 /* cover 方式绘制图片（带滤镜）到指定方形区域 */
@@ -700,4 +701,63 @@ async function downloadArtwork() {
   a.href = canvas.toDataURL('image/png');
   a.click();
   toast('文创成品已保存到本地');
+}
+
+/* ---------- 四风格对比：一键生成 2×2 对比图 ---------- */
+let wsCompareUrl = '';      // 对比图 dataURL
+let wsCompareName = '';     // 对比图对应风物名（用于下载文件名）
+
+async function openStyleCompare() {
+  if (!wsGenerated) { toast('请先点击「AI魔法生成」，生成后再做四风格对比'); return; }
+  const item = getWsItem();
+  const KAI = '"KaiTi","STKaiti","楷体",serif';
+  const CELL = 596, SEAM = 8, SIZE = CELL * 2 + SEAM, ART = 460, BAR = 56;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = SIZE;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#FAF7EF'; ctx.fillRect(0, 0, SIZE, SIZE);   // 纸色底（即四格间的缝色）
+
+  for (let i = 0; i < STYLES.length; i++) {
+    const style = STYLES[i], pal = style.pal;
+    const cx = (i % 2) * (CELL + SEAM);
+    const cy = Math.floor(i / 2) * (CELL + SEAM);
+    // 格底：该风格纸底色
+    ctx.fillStyle = pal.paper; ctx.fillRect(cx, cy, CELL, CELL);
+    // 居中方形插画（cover）
+    const ax = cx + (CELL - ART) / 2, ay = cy + (CELL - ART) / 2;
+    const art = await getArtImage(item, ART, style.id);
+    if (art.custom) { ctx.fillStyle = pal.bg; ctx.fillRect(ax, ay, ART, ART); }
+    drawCover(ctx, art, ax, ay, ART, ART);
+    ctx.strokeStyle = pal.main; ctx.lineWidth = 2; ctx.strokeRect(ax, ay, ART, ART);
+    // 底部风格名标签条（风格名 + AI调色小字）
+    const barY = cy + CELL - BAR;
+    ctx.fillStyle = pal.bg; ctx.fillRect(cx, barY, CELL, BAR);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = pal.deep; ctx.font = `26px ${KAI}`;
+    ctx.fillText(style.name, cx + CELL / 2, barY + 26);
+    ctx.fillStyle = pal.main; ctx.font = `14px ${KAI}`;
+    ctx.fillText('AI 调色', cx + CELL / 2, barY + 47);
+  }
+  // 整体外框
+  ctx.strokeStyle = '#33413C'; ctx.lineWidth = 4; ctx.strokeRect(2, 2, SIZE - 4, SIZE - 4);
+
+  wsCompareUrl = canvas.toDataURL('image/png');
+  wsCompareName = item.name;
+  document.getElementById('compareItemName').textContent = item.name;
+  document.getElementById('compareImg').src = wsCompareUrl;
+  document.getElementById('compareModal').classList.remove('hidden');
+}
+
+function downloadCompare() {
+  if (!wsCompareUrl) return;
+  const a = document.createElement('a');
+  a.download = `四风格对比_${wsCompareName}.png`;
+  a.href = wsCompareUrl;
+  a.click();
+  toast('四风格对比图已保存到本地');
+}
+
+function closeCompare() {
+  document.getElementById('compareModal').classList.add('hidden');
 }

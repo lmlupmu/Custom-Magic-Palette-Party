@@ -1,0 +1,13 @@
+{
+  "name": "风物魔法调色派对",
+  "short_name": "风物调色派对",
+  "description": "大别山乡土风物 AI 文创小游戏：消除集风物、AI 魔法调色、生成明信片与茶叶礼盒",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FAF7EF",
+  "theme_color": "#2E8B7A",
+  "icons": [
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
