@@ -8,6 +8,7 @@ let wsItemId = null;        // 选中的风物（内置id 或 custom:xxx）
 let wsStyleId = 'spring';   // 选中的色调
 let wsPoem = '';            // AI 生成的小诗
 let wsGenerated = false;    // 是否已生成
+let wsAiImage = null;       // AI 风格化后的图片（dataURL），null 时回退 CSS 滤镜
 let wsMode = 'postcard';    // 预览模式 postcard | teabox
 
 /* 下载分辨率档位：基准尺寸的 1x/2x/3x 等比放大导出，选择存 localStorage 刷新保持 */
@@ -168,6 +169,7 @@ async function deleteCustom(id) {
 function selectItem(id) {
   wsItemId = id;
   wsGenerated = false;
+  wsAiImage = null;
   markActiveCell();
   document.getElementById('poemBox').classList.add('hidden');
   document.getElementById('previewModeBar').classList.add('hidden');
@@ -211,6 +213,7 @@ function renderStyles() {
     el.onclick = () => {
       wsStyleId = s.id;
       wsGenerated = false;
+      wsAiImage = null;
       SoundFX.click();
       renderStyles();
       renderTplBar();
@@ -230,8 +233,66 @@ function renderStyles() {
 const AI_STEPS = ['AI 正在理解线稿结构…', 'AI 正在调配艺术色彩…', 'AI 正在吟咏国风小诗…', 'AI 正在装裱文创成品…'];
 const AI_STEPS_CUSTOM = ['AI 正在识别你的风物…', 'AI 正在分析名字意境…', 'AI 正在吟咏专属小诗…', 'AI 正在装裱文创成品…'];
 
-function generateArtwork() {
-  if (!getWsItem()) { toast('请先在左侧选择一张已解锁的风物线稿'); return; }
+/* ---------- 真实 AI API 调用（Cloudflare Workers AI） ---------- */
+async function callAIPoem(item, style) {
+  try {
+    const resp = await fetch('/api/generate-poem', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: item.name,
+        alias: item.alias || '',
+        styleName: style.name,
+        styleDesc: style.desc,
+        isCustom: !!item.custom
+      })
+    });
+    if (!resp.ok) throw new Error('poem API ' + resp.status);
+    const data = await resp.json();
+    const lines = (data.poem || '').split('\n').filter(l => l.trim());
+    if (lines.length >= 2) return data.poem.trim();
+    throw new Error('poem format invalid');
+  } catch (e) { return null; }
+}
+
+async function callAIStylize(item, style) {
+  if (!item.custom) return null;
+  try {
+    const resp = await fetch('/api/stylize-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image: item.img,
+        styleName: style.name,
+        styleDesc: style.desc
+      })
+    });
+    if (!resp.ok) throw new Error('image API ' + resp.status);
+    const data = await resp.json();
+    if (data.image) return data.image;
+    throw new Error('no image in response');
+  } catch (e) { return null; }
+}
+
+/* 自定义图片 HTML：AI 风格化图优先，否则 CSS 滤镜 */
+function customImgTag(item, pal, fillClass) {
+  const cls = fillClass ? ' ' + fillClass : '';
+  if (wsAiImage) {
+    return `<div class="pv-custom${cls}" style="background:${pal.bg}"><img src="${wsAiImage}" alt="${item.name}"></div>`;
+  }
+  const filter = CUSTOM_FILTERS[wsStyleId] || 'none';
+  return `<div class="pv-custom${cls}" style="background:${pal.bg}"><img src="${item.img}" style="filter:${filter}" alt="${item.name}"></div>`;
+}
+
+function fallbackPoem(item, styleId) {
+  if (item.custom) return generateCustomPoem(item.name, styleId);
+  const bank = POEMS[wsItemId];
+  return bank ? bank[styleId] : POEMS.tea.spring;
+}
+
+async function generateArtwork() {
+  const item = getWsItem();
+  if (!item) { toast('请先在左侧选择一张已解锁的风物线稿'); return; }
   const btn = document.getElementById('btnMagic');
   btn.disabled = true;
 
@@ -244,26 +305,45 @@ function generateArtwork() {
   const loadingText = document.getElementById('aiLoadingText');
   loading.classList.remove('hidden');
 
-  const steps = getWsItem().custom ? AI_STEPS_CUSTOM : AI_STEPS;
+  const style = getStyle(wsStyleId);
+  const steps = item.custom ? AI_STEPS_CUSTOM : AI_STEPS;
   let step = 0;
   loadingText.textContent = steps[0];
   const timer = setInterval(() => {
-    step++;
-    if (step < steps.length) {
-      loadingText.textContent = steps[step];
-    } else {
-      clearInterval(timer);
-      loading.classList.add('hidden');
-      finishGenerate();
-      btn.disabled = false;
-    }
-  }, 620);
+    step = (step + 1) % steps.length;
+    loadingText.textContent = steps[step];
+  }, 1000);
+
+  try {
+    const [aiPoem, aiImage] = await Promise.all([
+      callAIPoem(item, style),
+      callAIStylize(item, style)
+    ]);
+
+    clearInterval(timer);
+    loading.classList.add('hidden');
+
+    wsPoem = aiPoem || fallbackPoem(item, wsStyleId);
+    wsAiImage = aiImage;
+
+    if (!aiPoem) toast('AI 诗词服务暂不可用，已使用本地诗库');
+    if (item.custom && !aiImage) toast('AI 图像风格化暂不可用，已使用滤镜模拟');
+    finishGenerate();
+  } catch (e) {
+    clearInterval(timer);
+    loading.classList.add('hidden');
+    wsPoem = fallbackPoem(item, wsStyleId);
+    wsAiImage = null;
+    finishGenerate();
+    toast('AI 服务暂时不可用，已使用本地生成');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function finishGenerate() {
   const item = getWsItem();
   const style = getStyle(wsStyleId);
-  wsPoem = item.custom ? generateCustomPoem(item.name, wsStyleId) : POEMS[wsItemId][wsStyleId];
   wsGenerated = true;
 
   document.getElementById('previewModeBar').classList.remove('hidden');
@@ -275,9 +355,7 @@ function finishGenerate() {
   // AI 小诗（带打字机效果）
   const poemBox = document.getElementById('poemBox');
   poemBox.classList.remove('hidden');
-  document.getElementById('poemStyleName').textContent = item.custom
-    ? `AI 分析「${item.name}」赋诗 · ${style.name}`
-    : `为「${item.name}」赋诗 · ${style.name}`;
+  document.getElementById('poemStyleName').textContent = `AI 为「${item.name}」赋诗 · ${style.name}`;
   typePoem(wsPoem);
   SoundFX.generate();
   toast('AI 文创生成完成，可切换预览模式或下载保存');
@@ -380,10 +458,7 @@ function teaboxText(item) {
 
 /* 预览用插画 HTML：内置=SVG上色，自定义=图片+风格滤镜 */
 function previewArtHtml(item, style, size) {
-  if (item.custom) {
-    const filter = CUSTOM_FILTERS[wsStyleId] || 'none';
-    return `<div class="pv-custom" style="background:${style.pal.bg}"><img src="${item.img}" style="filter:${filter}" alt="${item.name}"></div>`;
-  }
+  if (item.custom) return customImgTag(item, style.pal);
   return sizedSvg(item.build(style.pal, true), size, size);
 }
 
@@ -402,7 +477,7 @@ function renderPreview() {
     if (tpl === 'wide') {
       /* 横版全图款：上方大幅横图，下方标题 + 横排小诗 + 小印章 */
       const wideArt = item.custom
-        ? `<div class="pv-custom pv-fill" style="background:${pal.bg}"><img src="${item.img}" style="filter:${CUSTOM_FILTERS[wsStyleId] || 'none'}" alt="${item.name}"></div>`
+        ? customImgTag(item, pal, 'pv-fill')
         : sizedSvg(sliceSvg(item.build(pal, true)), 640, 352);
       stage.innerHTML = `
       <div class="postcard pc-wide" style="background:${pal.paper}">
@@ -448,7 +523,7 @@ function renderPreview() {
     if (tpl === 'landscape') {
       /* 山水开窗款：左侧竖排品牌 + 右侧双线描边圆角开窗插画 */
       const winArt = item.custom
-        ? `<div class="pv-custom pv-fill" style="background:${pal.bg}"><img src="${item.img}" style="filter:${CUSTOM_FILTERS[wsStyleId] || 'none'}" alt="${item.name}"></div>`
+        ? customImgTag(item, pal, 'pv-fill')
         : sizedSvg(sliceSvg(item.build(pal, true)), 480, 360);
       stage.innerHTML = `
       <div class="teabox tb-landscape" style="background:${pal.paper};border-color:${pal.deep}">
@@ -511,7 +586,12 @@ function loadImg(src) {
 /* 取某项的 canvas 用图（内置=按指定风格上色的SVG图，自定义=带该风格滤镜的图片）；styleId 缺省取当前选中色调 */
 async function getArtImage(item, size, styleId) {
   const sid = styleId || wsStyleId;
-  if (item.custom) return { img: await loadImg(item.img), filter: CUSTOM_FILTERS[sid] || 'none', custom: true };
+  if (item.custom) {
+    if (wsAiImage && (!styleId || styleId === wsStyleId)) {
+      return { img: await loadImg(wsAiImage), filter: 'none', custom: true };
+    }
+    return { img: await loadImg(item.img), filter: CUSTOM_FILTERS[sid] || 'none', custom: true };
+  }
   return { img: await loadSvgImg(item.build(getStyle(sid).pal, true), size, size), filter: 'none', custom: false };
 }
 
@@ -544,7 +624,10 @@ function rr(ctx, x, y, w, h, r) {
 
 /* 非方形区域的插画图（内置线稿用 slice 裁切，自定义图走 drawCover cover） */
 async function getArtImageSlice(item, w, h) {
-  if (item.custom) return { img: await loadImg(item.img), filter: CUSTOM_FILTERS[wsStyleId] || 'none', custom: true };
+  if (item.custom) {
+    if (wsAiImage) return { img: await loadImg(wsAiImage), filter: 'none', custom: true };
+    return { img: await loadImg(item.img), filter: CUSTOM_FILTERS[wsStyleId] || 'none', custom: true };
+  }
   return { img: await loadSvgImg(sliceSvg(item.build(getStyle(wsStyleId).pal, true)), w, h), filter: 'none', custom: false };
 }
 
