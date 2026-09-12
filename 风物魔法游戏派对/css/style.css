@@ -26,6 +26,8 @@ body {
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 .hidden { display: none !important; }
 strong { color: var(--green-deep); }
@@ -756,6 +758,21 @@ main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 60px; }
   .about-grid { grid-template-columns: 1fr; }
   .hint-box { width: 220px; }
   .flow-arrow { display: none; }
-  .as-window { right: 12px; bottom: 12px; left: 12px; width: auto; height: 70vh; }
-  .as-avatar-btn { right: 16px; bottom: 16px; width: 56px; height: 56px; font-size: 22px; }
+  .as-window {
+    right: 10px; bottom: 10px; left: 10px;
+    width: auto; height: 72vh;
+    border-radius: 16px;
+  }
+  .as-avatar-btn {
+    right: 14px; bottom: 14px;
+    width: 60px; height: 60px;
+    font-size: 24px;
+  }
+  .as-mic-btn {
+    width: 58px; height: 58px;
+    font-size: 26px;
+  }
+  .as-bubble { font-size: 15px; padding: 11px 14px; }
+  .as-msg-avatar { width: 34px; height: 34px; }
+  .as-listen-hint { font-size: 14px; bottom: 72px; }
 }

@@ -27,10 +27,10 @@ const Assistant = (() => {
 
     if (!chatWindow) return;
 
-    avatarBtn.addEventListener('click', toggleWindow);
+    avatarBtn.addEventListener('click', () => { unlockTTS(); toggleWindow(); });
     document.getElementById('assistantClose').addEventListener('click', () => setMinimized(true));
-    document.getElementById('assistantMute').addEventListener('click', toggleMute);
-    if (micBtn) micBtn.addEventListener('click', toggleListening);
+    document.getElementById('assistantMute').addEventListener('click', () => { unlockTTS(); toggleMute(); });
+    if (micBtn) micBtn.addEventListener('click', () => { unlockTTS(); toggleListening(); });
 
     initTTS();
     initSpeechRecognition();
@@ -39,6 +39,7 @@ const Assistant = (() => {
     const startBtn = document.querySelector('.btn-primary.btn-big');
     if (startBtn) {
       startBtn.addEventListener('click', () => {
+        unlockTTS();
         if (firstTrigger) {
           firstTrigger = false;
           setTimeout(() => {
@@ -50,25 +51,56 @@ const Assistant = (() => {
     }
   }
 
+  /* iOS Safari TTS 解锁：必须在用户手势同步调用 */
+  function unlockTTS() {
+    if (!('speechSynthesis' in window)) return;
+    // 先 resume（iOS 上有时会被暂停）
+    if (speechSynthesis.paused) speechSynthesis.resume();
+    // 创建一个无声的 utterance 来解锁权限
+    const dummy = new SpeechSynthesisUtterance('');
+    dummy.volume = 0;
+    try { speechSynthesis.speak(dummy); } catch (e) {}
+    // 初始化 voice（如果还没加载）
+    if (!voice) initTTS();
+  }
+
   /* ---------- TTS 语音合成（固定 Microsoft Xiaoxiao） ---------- */
   let voiceQueue = [];
   let queueIndex = 0;
+  let ttsReady = false;
 
   function initTTS() {
     if (!('speechSynthesis' in window)) {
-      ttsEnabled = false; return;
+      ttsEnabled = false; ttsReady = false; return;
     }
+
     const loadVoices = () => {
       const voices = speechSynthesis.getVoices();
       // 固定使用 Microsoft Xiaoxiao
       voice = voices.find(v => /xiaoxiao/i.test(v.name)) ||
               voices.find(v => /zh|chinese|中文/i.test(v.lang)) ||
               voices[0];
+      if (voice) ttsReady = true;
     };
+
     loadVoices();
+
+    // 移动端 voices 加载是异步的，需要监听事件
     if (speechSynthesis.onvoiceschanged !== undefined) {
-      speechSynthesis.onvoiceschanged = loadVoices;
+      speechSynthesis.onvoiceschanged = () => {
+        loadVoices();
+      };
     }
+    // iOS Safari 上 voiceschanged 可能不触发，轮询兜底
+    if (!voice) {
+      let attempts = 0;
+      const iv = setInterval(() => {
+        loadVoices();
+        attempts++;
+        if (voice || attempts > 20) clearInterval(iv);
+      }, 200);
+    }
+
     const savedMute = localStorage.getItem('wm_tts_muted');
     if (savedMute === '1') ttsEnabled = false;
     updateMuteIcon();
@@ -76,8 +108,26 @@ const Assistant = (() => {
 
   /* 分段朗读：按标点切分，逐句播放 */
   function speak(text) {
-    if (!ttsEnabled || !voice) return;
+    if (!ttsEnabled) return;
+
+    // 移动端延迟初始化：如果 voice 还没加载，先尝试加载再播放
+    if (!voice || !ttsReady) {
+      initTTS();
+      // 延迟 300ms 后重试，给 voices 加载时间
+      setTimeout(() => {
+        if (voice && ttsEnabled) doSpeak(text);
+      }, 300);
+      return;
+    }
+    doSpeak(text);
+  }
+
+  function doSpeak(text) {
+    if (!voice || !ttsEnabled) return;
     stopSpeak();
+
+    // iOS Safari 修复：先 resume 再 speak，解决首次播放无声问题
+    if (speechSynthesis.paused) speechSynthesis.resume();
 
     const clean = text.replace(/[*_`#]/g, '').replace(/<[^>]+>/g, '');
     voiceQueue = clean.split(/([，。？！；\n]+)/).filter(s => s.trim());
@@ -111,10 +161,13 @@ const Assistant = (() => {
       queueIndex++;
       setTimeout(() => playNextSegment(), 300);
     };
-    utter.onerror = () => {
+    utter.onerror = (e) => {
+      // iOS 上有时 error 只是被中断，继续下一段
       queueIndex++;
       setTimeout(() => playNextSegment(), 300);
     };
+
+    // iOS Safari 必须在用户手势之后才能 speak，这里由调用方保证
     speechSynthesis.speak(utter);
   }
 
