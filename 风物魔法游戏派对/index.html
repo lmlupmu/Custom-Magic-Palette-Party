@@ -168,7 +168,7 @@
       </div>
       <div class="about-card">
         <h3>AI 应用说明</h3>
-        <p>基于 <strong>Cloudflare Workers AI</strong> 部署真实 AI 模型：<strong>Qwen3 大语言模型</strong>即兴生成贴合风物意象的国风七言绝句，<strong>SDXL 扩散模型</strong>对用户上传图片进行艺术风格迁移。AI 承担诗词创作与图像风格化两大核心环节，降低乡土文创创作门槛，让人人都是乡土文创设计师。</p>
+        <p>基于 <strong>Cloudflare Workers AI</strong> 部署多模态 AI 能力：<strong>Qwen3 大语言模型</strong>即兴生成国风七言绝句，<strong>SDXL 扩散模型</strong>实现图像艺术风格迁移。更有 AI 智能体向导「小风」——支持自然语言对话问答、语音播报、Function Calling 操控界面（跳转页面、选风物、生成文创等），打造端到端的 AI 文创创作体验，让人人都是乡土文创设计师。</p>
       </div>
     </div>
     <div class="about-foot">
@@ -257,10 +257,35 @@
 
 <footer class="site-foot">风物魔法调色派对 · AI+艺术文创应用赛道 · 信阳大别山乡土风物数字文创</footer>
 
+<!-- ======== AI 助手「小风」悬浮窗 ======== -->
+<div id="assistantAvatar" class="as-avatar-btn" title="AI 向导小风">
+  <div class="as-avatar-img idle">风</div>
+</div>
+
+<div id="assistantWindow" class="as-window minimized">
+  <div class="as-header">
+    <div class="as-header-avatar">风</div>
+    <div class="as-header-info">
+      <div class="as-header-name">AI 向导 · 小风</div>
+      <div class="as-header-status">在线 · 随时为你服务</div>
+    </div>
+    <div class="as-header-btns">
+      <button id="assistantMute" class="as-header-btn" title="语音开关">🔊</button>
+      <button id="assistantClose" class="as-header-btn" title="收起">—</button>
+    </div>
+  </div>
+  <div id="assistantMessages" class="as-messages"></div>
+  <div class="as-input-area">
+    <input id="assistantInput" class="as-input" type="text" placeholder="和小风聊聊天…" maxlength="200">
+    <button id="assistantSend" class="as-send-btn" title="发送">➤</button>
+  </div>
+</div>
+
 <script src="js/data.js"></script>
 <script src="js/game.js"></script>
 <script src="js/workshop.js"></script>
 <script src="js/audio.js"></script>
+<script src="js/assistant.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

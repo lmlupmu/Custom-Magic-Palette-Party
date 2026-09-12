@@ -588,6 +588,149 @@ main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 60px; }
   color: #8ba79d; border-top: 1px solid var(--green-mist);
 }
 
+/* ---------- AI 助手「小风」悬浮窗 ---------- */
+.as-avatar-btn {
+  position: fixed; right: 24px; bottom: 24px; z-index: 200;
+  width: 64px; height: 64px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--green), var(--green-deep));
+  border: 3px solid #fff; box-shadow: 0 6px 20px rgba(31, 106, 91, .35);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  font-size: 28px; color: #fff; transition: all .3s;
+  animation: asBounce 2.5s ease-in-out infinite;
+}
+.as-avatar-btn:hover { transform: scale(1.1); box-shadow: 0 8px 28px rgba(31, 106, 91, .45); }
+@keyframes asBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+.as-avatar-img {
+  width: 100%; height: 100%; border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #8FCB9B, #2E8B7A 70%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: bold; color: #fff;
+  font-family: "KaiTi", "STKaiti", serif;
+  position: relative;
+}
+.as-avatar-img::after {
+  content: ''; position: absolute; inset: 0; border-radius: 50%;
+  box-shadow: inset 0 -4px 8px rgba(0,0,0,.15);
+}
+.as-avatar-img.speaking { animation: asSpeak 0.4s ease-in-out infinite alternate; }
+.as-avatar-img.thinking { animation: asThink 1s ease-in-out infinite; }
+@keyframes asSpeak {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(127, 191, 168, .6); }
+  100% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(127, 191, 168, 0); }
+}
+@keyframes asThink {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+
+.as-window {
+  position: fixed; right: 24px; bottom: 24px; z-index: 200;
+  width: 360px; height: 520px;
+  background: var(--paper);
+  border-radius: 18px;
+  border: 2px solid var(--green-soft);
+  box-shadow: 0 12px 40px rgba(31, 106, 91, .2);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: asSlideUp .35s cubic-bezier(.2, .9, .3, 1.2);
+}
+.as-window.minimized { display: none; }
+@keyframes asSlideUp {
+  from { opacity: 0; transform: translateY(20px) scale(.95); }
+  to { opacity: 1; transform: none }
+}
+
+.as-header {
+  background: linear-gradient(135deg, var(--green), var(--green-deep));
+  color: #fff; padding: 12px 16px;
+  display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0;
+}
+.as-header-avatar {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: rgba(255,255,255,.25);
+  border: 2px solid rgba(255,255,255,.5);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: bold;
+  font-family: "KaiTi", "STKaiti", serif;
+}
+.as-header-info { flex: 1; }
+.as-header-name { font-size: 16px; font-weight: bold; letter-spacing: 2px; }
+.as-header-status { font-size: 12px; opacity: .85; }
+.as-header-btns { display: flex; gap: 6px; }
+.as-header-btn {
+  width: 30px; height: 30px; border-radius: 50%;
+  border: none; background: rgba(255,255,255,.2); color: #fff;
+  cursor: pointer; font-size: 14px; transition: background .2s;
+  display: flex; align-items: center; justify-content: center;
+}
+.as-header-btn:hover { background: rgba(255,255,255,.35); }
+
+.as-messages {
+  flex: 1; overflow-y: auto; padding: 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.as-msg { display: flex; gap: 8px; max-width: 85%; }
+.as-msg-assistant { align-self: flex-start; }
+.as-msg-user { align-self: flex-end; flex-direction: row-reverse; }
+.as-msg-avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--green), var(--green-deep));
+  color: #fff; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: bold;
+  font-family: "KaiTi", "STKaiti", serif;
+}
+.as-bubble {
+  padding: 9px 13px; border-radius: 14px;
+  font-size: 14px; line-height: 1.55;
+  white-space: pre-wrap; word-break: break-word;
+}
+.as-msg-assistant .as-bubble {
+  background: #fff; color: var(--ink);
+  border: 1px solid var(--green-mist);
+  border-top-left-radius: 4px;
+}
+.as-msg-user .as-bubble {
+  background: linear-gradient(135deg, var(--green), var(--green-deep));
+  color: #fff; border-top-right-radius: 4px;
+}
+.as-typing { display: flex; gap: 4px; padding: 14px 16px !important; }
+.as-typing span {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--green-soft);
+  animation: asTyping 1.2s infinite;
+}
+.as-typing span:nth-child(2) { animation-delay: .2s; }
+.as-typing span:nth-child(3) { animation-delay: .4s; }
+@keyframes asTyping {
+  0%, 60%, 100% { transform: translateY(0); opacity: .5; }
+  30% { transform: translateY(-5px); opacity: 1; }
+}
+
+.as-input-area {
+  padding: 10px 12px; border-top: 1px solid var(--green-mist);
+  display: flex; gap: 8px; flex-shrink: 0; background: #fff;
+}
+.as-input {
+  flex: 1; border: 1.5px solid var(--green-mist);
+  border-radius: 999px; padding: 8px 14px;
+  font-family: inherit; font-size: 14px;
+  outline: none; transition: border-color .2s;
+  background: var(--paper);
+}
+.as-input:focus { border-color: var(--green); }
+.as-send-btn {
+  width: 36px; height: 36px; border-radius: 50%;
+  border: none; background: linear-gradient(135deg, var(--green), var(--green-deep));
+  color: #fff; cursor: pointer; font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform .2s; flex-shrink: 0;
+}
+.as-send-btn:hover { transform: scale(1.08); }
+
 /* ---------- 响应式 ---------- */
 @media (max-width: 980px) {
   .workshop { grid-template-columns: 1fr; }
@@ -597,4 +740,6 @@ main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 60px; }
   .about-grid { grid-template-columns: 1fr; }
   .hint-box { width: 220px; }
   .flow-arrow { display: none; }
+  .as-window { right: 12px; bottom: 12px; left: 12px; width: auto; height: 70vh; }
+  .as-avatar-btn { right: 16px; bottom: 16px; width: 56px; height: 56px; font-size: 22px; }
 }

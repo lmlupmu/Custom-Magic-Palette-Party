@@ -149,4 +149,7 @@ if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
   renderStyles();
   renderGallery();
   document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === wsMode));
+
+  // AI 助手初始化
+  if (typeof Assistant !== 'undefined') Assistant.init();
 })();
