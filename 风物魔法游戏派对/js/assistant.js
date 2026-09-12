@@ -16,6 +16,7 @@ const Assistant = (() => {
   let firstTrigger = true;
   let isListening = false;
   let recognition = null;
+  let lastFinalText = '';   // 保存最终识别结果
 
   /* ---------- 初始化 ---------- */
   function init() {
@@ -170,7 +171,10 @@ const Assistant = (() => {
           interimTranscript += transcript;
         }
       }
-      updateListeningText(interimTranscript || finalTranscript);
+      // 保存最终结果
+      if (finalTranscript) lastFinalText = finalTranscript;
+      // 显示给用户看（优先显示最终结果，否则显示中间结果）
+      updateListeningText(finalTranscript || interimTranscript);
     };
 
     recognition.onerror = (event) => {
@@ -178,6 +182,7 @@ const Assistant = (() => {
       setMicState('idle');
       setAvatarState('idle');
       showListeningHint(false);
+      lastFinalText = '';
       if (event.error === 'no-speech') {
         toast('没听到声音呢，请靠近麦克风再说一次');
       } else if (event.error === 'audio-capture') {
@@ -190,18 +195,21 @@ const Assistant = (() => {
     };
 
     recognition.onend = () => {
-      if (isListening) {
-        // 正常结束：获取最终结果并发送
-        isListening = false;
-        setMicState('idle');
-        setAvatarState('idle');
-        showListeningHint(false);
-        // 最后一次结果在 onresult 中已处理，这里通过 DOM 读取
-        const hintEl = document.getElementById('assistantListenHint');
-        if (hintEl && hintEl.dataset.text) {
-          const text = hintEl.dataset.text.trim();
-          if (text) sendMessage(text);
-        }
+      // 无论怎么结束的（自然结束 / 用户手动停止），只要有识别结果就发送
+      const wasListening = isListening;
+      isListening = false;
+      setMicState('idle');
+      setAvatarState('idle');
+      showListeningHint(false);
+
+      const text = lastFinalText.trim();
+      lastFinalText = '';  // 清空，防止重复发送
+
+      if (text) {
+        sendMessage(text);
+      } else if (wasListening) {
+        // 用户确实在听但没识别出内容
+        toast('没听清呢，请再说一次吧');
       }
     };
   }
