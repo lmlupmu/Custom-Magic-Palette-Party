@@ -669,11 +669,8 @@ main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 60px; }
 .as-msg-user { align-self: flex-end; flex-direction: row-reverse; }
 .as-msg-avatar {
   width: 30px; height: 30px; border-radius: 50%;
-  background: linear-gradient(135deg, var(--green), var(--green-deep));
-  color: #fff; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: bold;
-  font-family: "KaiTi", "STKaiti", serif;
+  object-fit: cover; flex-shrink: 0;
+  border: 1.5px solid var(--green-soft);
 }
 .as-bubble {
   padding: 9px 13px; border-radius: 14px;
