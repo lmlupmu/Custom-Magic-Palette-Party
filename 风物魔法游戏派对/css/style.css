@@ -22,6 +22,10 @@ body {
     radial-gradient(circle at 85% 85%, rgba(201, 128, 59, .10), transparent 40%),
     var(--paper);
   min-height: 100vh;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
 }
 .hidden { display: none !important; }
 strong { color: var(--green-deep); }
