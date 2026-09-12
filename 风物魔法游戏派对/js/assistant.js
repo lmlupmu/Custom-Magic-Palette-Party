@@ -28,6 +28,7 @@ const Assistant = (() => {
     avatarBtn.addEventListener('click', toggleWindow);
     document.getElementById('assistantClose').addEventListener('click', () => setMinimized(true));
     document.getElementById('assistantMute').addEventListener('click', toggleMute);
+    document.getElementById('assistantSettings').addEventListener('click', toggleVoicePanel);
     document.getElementById('assistantSend').addEventListener('click', sendMessage);
     chatInput.addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
@@ -53,52 +54,123 @@ const Assistant = (() => {
   }
 
   /* ---------- TTS 语音合成 ---------- */
+  let allVoices = [];
+  let voiceQueue = [];       // 分段朗读队列
+  let queueIndex = 0;
+
   function initTTS() {
     if (!('speechSynthesis' in window)) {
       ttsEnabled = false;
       return;
     }
     const loadVoices = () => {
-      const voices = speechSynthesis.getVoices();
-      // 优先选中文女声
-      voice = voices.find(v =>
-        /zh|chinese|中文/i.test(v.lang) &&
-        /xiaoxiao|yaoyao|female|女|xiaoyi|xiaohan/i.test(v.name)
-      ) || voices.find(v => /zh|chinese|中文/i.test(v.lang)) || voices[0];
+      allVoices = speechSynthesis.getVoices();
+      pickBestVoice();
+      populateVoiceSelector();
     };
     loadVoices();
     if (speechSynthesis.onvoiceschanged !== undefined) {
       speechSynthesis.onvoiceschanged = loadVoices;
     }
-    // 从本地存储读取静音状态
-    const saved = localStorage.getItem('wm_tts_muted');
-    if (saved === '1') ttsEnabled = false;
+    const savedMute = localStorage.getItem('wm_tts_muted');
+    if (savedMute === '1') ttsEnabled = false;
     updateMuteIcon();
   }
 
+  /* 智能选音：优先御姐音，其次知性女声，再默认中文女声 */
+  function pickBestVoice() {
+    const zhVoices = allVoices.filter(v => /zh|chinese|中文|cmn|yue/i.test(v.lang));
+    if (zhVoices.length === 0) { voice = allVoices[0]; return; }
+
+    // 御姐/成熟女性语音关键词（按优先级排序）
+    const matureKeywords = ['yaoyao', 'xiaoyi', 'yunxia', 'xiaohan', 'xiaoqiu'];
+    for (const kw of matureKeywords) {
+      const found = zhVoices.find(v => new RegExp(kw, 'i').test(v.name));
+      if (found) { voice = found; return; }
+    }
+    // 次之：任何明确标记 female 的中文语音
+    const female = zhVoices.find(v => /female|女/i.test(v.name));
+    if (female) { voice = female; return; }
+    // 兜底：第一个中文语音
+    voice = zhVoices[0];
+  }
+
+  function populateVoiceSelector() {
+    const sel = document.getElementById('assistantVoice');
+    if (!sel) return;
+    sel.innerHTML = '';
+    allVoices.filter(v => /zh|chinese|中文|cmn|yue/i.test(v.lang)).forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.name;
+      opt.textContent = v.name;
+      if (voice && v.name === voice.name) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener('change', e => {
+      const chosen = allVoices.find(v => v.name === e.target.value);
+      if (chosen) voice = chosen;
+      localStorage.setItem('wm_tts_voice', e.target.value);
+    });
+    // 恢复上次选择
+    const saved = localStorage.getItem('wm_tts_voice');
+    if (saved) {
+      const prev = allVoices.find(v => v.name === saved);
+      if (prev) { voice = prev; sel.value = saved; }
+    }
+  }
+
+  /* 分段朗读：按标点切分，逐句播放，更流畅自然 */
   function speak(text) {
     if (!ttsEnabled || !voice) return;
-    if (isSpeaking) {
-      speechSynthesis.cancel();
-    }
+    stopSpeak();
+
     const clean = text.replace(/[*_`#]/g, '').replace(/<[^>]+>/g, '');
-    const utter = new SpeechSynthesisUtterance(clean);
+    // 按标点切分，保留标点；过滤空句
+    voiceQueue = clean.split(/([，。？！；\n]+)/).filter(s => s.trim());
+    // 把标点和前面的文字合并成一句
+    const merged = [];
+    for (let i = 0; i < voiceQueue.length; i++) {
+      if (/^[，。？！；\n]+$/.test(voiceQueue[i])) {
+        if (merged.length) merged[merged.length - 1] += voiceQueue[i];
+      } else {
+        merged.push(voiceQueue[i]);
+      }
+    }
+    voiceQueue = merged.filter(s => s.trim());
+    queueIndex = 0;
+    if (voiceQueue.length) playNextSegment();
+  }
+
+  function playNextSegment() {
+    if (queueIndex >= voiceQueue.length) {
+      isSpeaking = false; setAvatarState('idle'); return;
+    }
+    const seg = voiceQueue[queueIndex];
+    const utter = new SpeechSynthesisUtterance(seg);
     utter.voice = voice;
     utter.lang = 'zh-CN';
-    utter.rate = 1.0;
-    utter.pitch = 1.15;
+    utter.rate = 0.92;    // 稍慢更自然
+    utter.pitch = 0.92;   // 稍低偏御姐
     utter.volume = 0.9;
+
     utter.onstart = () => { isSpeaking = true; setAvatarState('speaking'); };
-    utter.onend = () => { isSpeaking = false; setAvatarState('idle'); };
-    utter.onerror = () => { isSpeaking = false; setAvatarState('idle'); };
+    utter.onend = () => {
+      queueIndex++;
+      // 句间停顿 280ms，模拟自然呼吸
+      setTimeout(() => playNextSegment(), 280);
+    };
+    utter.onerror = () => {
+      queueIndex++;
+      setTimeout(() => playNextSegment(), 280);
+    };
     speechSynthesis.speak(utter);
   }
 
   function stopSpeak() {
     if ('speechSynthesis' in window) {
       speechSynthesis.cancel();
-      isSpeaking = false;
-      setAvatarState('idle');
+      voiceQueue = []; queueIndex = 0;
+      isSpeaking = false; setAvatarState('idle');
     }
   }
 
@@ -108,6 +180,11 @@ const Assistant = (() => {
     updateMuteIcon();
     if (!ttsEnabled) stopSpeak();
     toast(ttsEnabled ? '语音已开启' : '语音已静音');
+  }
+
+  function toggleVoicePanel() {
+    const panel = document.getElementById('assistantVoicePanel');
+    if (panel) panel.classList.toggle('hidden');
   }
 
   function updateMuteIcon() {

@@ -259,20 +259,25 @@
 
 <!-- ======== AI 助手「小风」悬浮窗 ======== -->
 <div id="assistantAvatar" class="as-avatar-btn" title="AI 向导小风">
-  <div class="as-avatar-img idle">风</div>
+  <img src="images/assistant-avatar.jpg" class="as-avatar-img idle" alt="小风">
 </div>
 
 <div id="assistantWindow" class="as-window minimized">
   <div class="as-header">
-    <div class="as-header-avatar">风</div>
+    <img src="images/assistant-avatar.jpg" class="as-header-avatar" alt="小风">
     <div class="as-header-info">
       <div class="as-header-name">AI 向导 · 小风</div>
       <div class="as-header-status">在线 · 随时为你服务</div>
     </div>
     <div class="as-header-btns">
+      <button id="assistantSettings" class="as-header-btn" title="语音设置">⚙</button>
       <button id="assistantMute" class="as-header-btn" title="语音开关">🔊</button>
       <button id="assistantClose" class="as-header-btn" title="收起">—</button>
     </div>
+  </div>
+  <div id="assistantVoicePanel" class="as-voice-panel hidden">
+    <label class="as-voice-label">选择语音</label>
+    <select id="assistantVoice" class="as-voice-select"></select>
   </div>
   <div id="assistantMessages" class="as-messages"></div>
   <div class="as-input-area">
