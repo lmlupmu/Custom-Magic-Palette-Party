@@ -51,17 +51,11 @@ const Assistant = (() => {
     }
   }
 
-  /* iOS Safari TTS 解锁：必须在用户手势同步调用 */
+  /* iOS / Android TTS 解锁 */
   function unlockTTS() {
     if (!('speechSynthesis' in window)) return;
-    // 先 resume（iOS 上有时会被暂停）
     if (speechSynthesis.paused) speechSynthesis.resume();
-    // 创建一个无声的 utterance 来解锁权限
-    const dummy = new SpeechSynthesisUtterance('');
-    dummy.volume = 0;
-    try { speechSynthesis.speak(dummy); } catch (e) {}
-    // 初始化 voice（如果还没加载）
-    if (!voice) initTTS();
+    if (!ttsReady) initTTS();
   }
 
   /* ---------- TTS 语音合成（固定 Microsoft Xiaoxiao） ---------- */
@@ -113,10 +107,6 @@ const Assistant = (() => {
   function doSpeak(text) {
     if (!ttsEnabled) return;
     stopSpeak();
-
-    // Android 修复：先 cancel 再 speak，解决某些设备上首次播放卡住
-    speechSynthesis.cancel();
-    if (speechSynthesis.paused) speechSynthesis.resume();
 
     const clean = text.replace(/[*_`#]/g, '').replace(/<[^>]+>/g, '');
     voiceQueue = clean.split(/([，。？！；\n]+)/).filter(s => s.trim());
@@ -334,7 +324,14 @@ const Assistant = (() => {
   function showWelcome() {
     const welcome = '你好呀～我是小风！🎋\n\n你可以直接对着麦克风说话问我问题，或者让我帮你操作界面。比如：「打开游戏」、「选茶叶生成明信片」、「介绍一下信阳毛尖」……\n\n想聊什么，直接说吧～';
     addMessage('assistant', welcome);
-    speak(welcome);
+
+    // 检测是否被静音，如果被静音给出提示
+    const savedMute = localStorage.getItem('wm_tts_muted');
+    if (savedMute === '1') {
+      addMessage('assistant', '💡 提示：你之前把语音静音了，点击右上角的 🔇 可以重新开启语音播报哦～');
+    } else {
+      speak(welcome);
+    }
   }
 
   /* ---------- 消息渲染 ---------- */
@@ -637,10 +634,55 @@ const Assistant = (() => {
     return '这个问题好有意思～不过我现在需要联网AI才能给你最完美的回答呢。\n\n你可以先试试这些：\n• 问我关于信阳风物的问题\n• 说「打开游戏」或「去调色工坊」让我帮你操作\n• 让我开启演示模式体验全部内容\n\n有什么想聊的随时说哦～';
   }
 
+  /* ---------- TTS 诊断 ---------- */
+  function diagnose() {
+    const info = {
+      browser: navigator.userAgent,
+      speechSynthesisExists: 'speechSynthesis' in window,
+      voicesCount: 0,
+      voices: [],
+      ttsEnabled: ttsEnabled,
+      ttsReady: ttsReady,
+      voiceName: voice ? voice.name : 'null',
+      voiceLang: voice ? voice.lang : 'null',
+      localStorageMute: localStorage.getItem('wm_tts_muted'),
+      isMuted: !ttsEnabled
+    };
+    if ('speechSynthesis' in window) {
+      const voices = speechSynthesis.getVoices();
+      info.voicesCount = voices.length;
+      info.voices = voices.map(v => v.name + '(' + v.lang + ')');
+    }
+    console.log('========== TTS 诊断报告 ==========');
+    console.table(info);
+    console.log('==================================');
+    return info;
+  }
+
+  function testSpeak() {
+    if (!('speechSynthesis' in window)) {
+      toast('浏览器不支持语音合成');
+      return;
+    }
+    diagnose();
+    const test = new SpeechSynthesisUtterance('语音测试，如果你听到这句话，说明语音功能正常。');
+    test.lang = 'zh-CN';
+    test.rate = 0.95;
+    test.volume = 0.9;
+    if (voice) test.voice = voice;
+    test.onstart = () => console.log('TTS 测试：播放开始');
+    test.onend = () => console.log('TTS 测试：播放结束');
+    test.onerror = (e) => console.log('TTS 测试：播放出错', e);
+    speechSynthesis.speak(test);
+    toast('语音测试中，请听…');
+  }
+
   /* ---------- 公开方法 ---------- */
   return {
     init,
     toggleWindow,
-    speak
+    speak,
+    diagnose,
+    testSpeak
   };
 })();
