@@ -1,40 +1,38 @@
 /* =====================================================
- * assistant.js  AI 向导「小风」：对话 + TTS 女声 + 工具调用
+ * assistant.js  AI 向导「小风」：语音对话 + TTS + 工具调用
+ * 纯语音交互：语音识别输入 → AI 回复 → 语音播报输出
  * ===================================================== */
 
 const Assistant = (() => {
-  let chatHistory = [];       // 对话历史（不含 system prompt）
+  let chatHistory = [];
   let isSpeaking = false;
   let ttsEnabled = true;
   let voice = null;
   let chatWindow = null;
-  let chatBubble = null;
-  let chatInput = null;
   let msgList = null;
   let avatarBtn = null;
+  let micBtn = null;
   let minimized = true;
   let firstTrigger = true;
+  let isListening = false;
+  let recognition = null;
 
   /* ---------- 初始化 ---------- */
   function init() {
     chatWindow = document.getElementById('assistantWindow');
-    chatBubble = document.getElementById('assistantBubble');
-    chatInput = document.getElementById('assistantInput');
     msgList = document.getElementById('assistantMessages');
     avatarBtn = document.getElementById('assistantAvatar');
+    micBtn = document.getElementById('assistantMic');
 
     if (!chatWindow) return;
 
     avatarBtn.addEventListener('click', toggleWindow);
     document.getElementById('assistantClose').addEventListener('click', () => setMinimized(true));
     document.getElementById('assistantMute').addEventListener('click', toggleMute);
-    document.getElementById('assistantSettings').addEventListener('click', toggleVoicePanel);
-    document.getElementById('assistantSend').addEventListener('click', sendMessage);
-    chatInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-    });
+    if (micBtn) micBtn.addEventListener('click', toggleListening);
 
     initTTS();
+    initSpeechRecognition();
 
     // 首次欢迎：点击「开始创作之旅」触发
     const startBtn = document.querySelector('.btn-primary.btn-big');
@@ -49,24 +47,22 @@ const Assistant = (() => {
         }
       });
     }
-
-    // 也可通过点击右下角小圆球主动唤醒
   }
 
-  /* ---------- TTS 语音合成 ---------- */
-  let allVoices = [];
-  let voiceQueue = [];       // 分段朗读队列
+  /* ---------- TTS 语音合成（固定 Microsoft Xiaoxiao） ---------- */
+  let voiceQueue = [];
   let queueIndex = 0;
 
   function initTTS() {
     if (!('speechSynthesis' in window)) {
-      ttsEnabled = false;
-      return;
+      ttsEnabled = false; return;
     }
     const loadVoices = () => {
-      allVoices = speechSynthesis.getVoices();
-      pickBestVoice();
-      populateVoiceSelector();
+      const voices = speechSynthesis.getVoices();
+      // 固定使用 Microsoft Xiaoxiao
+      voice = voices.find(v => /xiaoxiao/i.test(v.name)) ||
+              voices.find(v => /zh|chinese|中文/i.test(v.lang)) ||
+              voices[0];
     };
     loadVoices();
     if (speechSynthesis.onvoiceschanged !== undefined) {
@@ -77,57 +73,13 @@ const Assistant = (() => {
     updateMuteIcon();
   }
 
-  /* 智能选音：优先御姐音，其次知性女声，再默认中文女声 */
-  function pickBestVoice() {
-    const zhVoices = allVoices.filter(v => /zh|chinese|中文|cmn|yue/i.test(v.lang));
-    if (zhVoices.length === 0) { voice = allVoices[0]; return; }
-
-    // 御姐/成熟女性语音关键词（按优先级排序）
-    const matureKeywords = ['yaoyao', 'xiaoyi', 'yunxia', 'xiaohan', 'xiaoqiu'];
-    for (const kw of matureKeywords) {
-      const found = zhVoices.find(v => new RegExp(kw, 'i').test(v.name));
-      if (found) { voice = found; return; }
-    }
-    // 次之：任何明确标记 female 的中文语音
-    const female = zhVoices.find(v => /female|女/i.test(v.name));
-    if (female) { voice = female; return; }
-    // 兜底：第一个中文语音
-    voice = zhVoices[0];
-  }
-
-  function populateVoiceSelector() {
-    const sel = document.getElementById('assistantVoice');
-    if (!sel) return;
-    sel.innerHTML = '';
-    allVoices.filter(v => /zh|chinese|中文|cmn|yue/i.test(v.lang)).forEach(v => {
-      const opt = document.createElement('option');
-      opt.value = v.name;
-      opt.textContent = v.name;
-      if (voice && v.name === voice.name) opt.selected = true;
-      sel.appendChild(opt);
-    });
-    sel.addEventListener('change', e => {
-      const chosen = allVoices.find(v => v.name === e.target.value);
-      if (chosen) voice = chosen;
-      localStorage.setItem('wm_tts_voice', e.target.value);
-    });
-    // 恢复上次选择
-    const saved = localStorage.getItem('wm_tts_voice');
-    if (saved) {
-      const prev = allVoices.find(v => v.name === saved);
-      if (prev) { voice = prev; sel.value = saved; }
-    }
-  }
-
-  /* 分段朗读：按标点切分，逐句播放，更流畅自然 */
+  /* 分段朗读：按标点切分，逐句播放 */
   function speak(text) {
     if (!ttsEnabled || !voice) return;
     stopSpeak();
 
     const clean = text.replace(/[*_`#]/g, '').replace(/<[^>]+>/g, '');
-    // 按标点切分，保留标点；过滤空句
     voiceQueue = clean.split(/([，。？！；\n]+)/).filter(s => s.trim());
-    // 把标点和前面的文字合并成一句
     const merged = [];
     for (let i = 0; i < voiceQueue.length; i++) {
       if (/^[，。？！；\n]+$/.test(voiceQueue[i])) {
@@ -149,19 +101,18 @@ const Assistant = (() => {
     const utter = new SpeechSynthesisUtterance(seg);
     utter.voice = voice;
     utter.lang = 'zh-CN';
-    utter.rate = 0.92;    // 稍慢更自然
-    utter.pitch = 0.92;   // 稍低偏御姐
+    utter.rate = 0.95;
+    utter.pitch = 1.0;
     utter.volume = 0.9;
 
     utter.onstart = () => { isSpeaking = true; setAvatarState('speaking'); };
     utter.onend = () => {
       queueIndex++;
-      // 句间停顿 280ms，模拟自然呼吸
-      setTimeout(() => playNextSegment(), 280);
+      setTimeout(() => playNextSegment(), 300);
     };
     utter.onerror = () => {
       queueIndex++;
-      setTimeout(() => playNextSegment(), 280);
+      setTimeout(() => playNextSegment(), 300);
     };
     speechSynthesis.speak(utter);
   }
@@ -182,17 +133,131 @@ const Assistant = (() => {
     toast(ttsEnabled ? '语音已开启' : '语音已静音');
   }
 
-  function toggleVoicePanel() {
-    const panel = document.getElementById('assistantVoicePanel');
-    if (panel) panel.classList.toggle('hidden');
-  }
-
   function updateMuteIcon() {
     const btn = document.getElementById('assistantMute');
     if (btn) btn.textContent = ttsEnabled ? '🔊' : '🔇';
   }
 
-  /* ---------- 头像动画状态 ---------- */
+  /* ---------- 语音识别（支持普通话 + 部分方言） ---------- */
+  function initSpeechRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast('您的浏览器不支持语音识别，请使用 Chrome/Edge');
+      if (micBtn) micBtn.style.display = 'none';
+      return;
+    }
+    recognition = new SpeechRecognition();
+    recognition.continuous = false;      // 单次识别
+    recognition.interimResults = true;   // 实时显示中间结果
+    recognition.lang = 'zh-CN';          // 中文（浏览器会自动处理方言）
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      isListening = true;
+      setMicState('listening');
+      setAvatarState('thinking');
+      showListeningHint(true);
+    };
+
+    recognition.onresult = (event) => {
+      let finalTranscript = '';
+      let interimTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+      updateListeningText(interimTranscript || finalTranscript);
+    };
+
+    recognition.onerror = (event) => {
+      isListening = false;
+      setMicState('idle');
+      setAvatarState('idle');
+      showListeningHint(false);
+      if (event.error === 'no-speech') {
+        toast('没听到声音呢，请靠近麦克风再说一次');
+      } else if (event.error === 'audio-capture') {
+        toast('无法访问麦克风，请检查权限设置');
+      } else if (event.error === 'not-allowed') {
+        toast('麦克风权限被拒绝，请在浏览器设置中允许');
+      } else {
+        toast('语音识别出错：' + event.error);
+      }
+    };
+
+    recognition.onend = () => {
+      if (isListening) {
+        // 正常结束：获取最终结果并发送
+        isListening = false;
+        setMicState('idle');
+        setAvatarState('idle');
+        showListeningHint(false);
+        // 最后一次结果在 onresult 中已处理，这里通过 DOM 读取
+        const hintEl = document.getElementById('assistantListenHint');
+        if (hintEl && hintEl.dataset.text) {
+          const text = hintEl.dataset.text.trim();
+          if (text) sendMessage(text);
+        }
+      }
+    };
+  }
+
+  function toggleListening() {
+    if (!recognition) {
+      toast('语音识别不可用'); return;
+    }
+    if (isListening) {
+      recognition.stop();
+      isListening = false;
+      setMicState('idle');
+      setAvatarState('idle');
+      showListeningHint(false);
+    } else {
+      // 停止当前播报，开始聆听
+      stopSpeak();
+      try {
+        recognition.start();
+      } catch (e) {
+        toast('语音识别启动失败，请刷新页面重试');
+      }
+    }
+  }
+
+  function setMicState(state) {
+    if (!micBtn) return;
+    micBtn.classList.remove('listening', 'idle');
+    micBtn.classList.add(state);
+    micBtn.innerHTML = state === 'listening'
+      ? '<span class="mic-wave"></span><span class="mic-wave"></span><span class="mic-wave"></span>'
+      : '🎙';
+  }
+
+  function showListeningHint(show) {
+    let hint = document.getElementById('assistantListenHint');
+    if (!hint) {
+      hint = document.createElement('div');
+      hint.id = 'assistantListenHint';
+      hint.className = 'as-listen-hint';
+      const inputArea = document.querySelector('.as-input-area');
+      if (inputArea) inputArea.appendChild(hint);
+    }
+    hint.classList.toggle('hidden', !show);
+    if (!show) { hint.textContent = ''; hint.dataset.text = ''; }
+  }
+
+  function updateListeningText(text) {
+    const hint = document.getElementById('assistantListenHint');
+    if (hint) {
+      hint.textContent = text;
+      hint.dataset.text = text;
+    }
+  }
+
+  /* ---------- 头像动画 ---------- */
   function setAvatarState(state) {
     const avatar = document.querySelector('.as-avatar-img');
     if (!avatar) return;
@@ -203,25 +268,22 @@ const Assistant = (() => {
   /* ---------- 窗口控制 ---------- */
   function toggleWindow() {
     setMinimized(!minimized);
-    if (!minimized && chatHistory.length === 0) {
-      showWelcome();
-    }
+    if (!minimized && chatHistory.length === 0) showWelcome();
   }
 
   function setMinimized(m) {
     minimized = m;
     if (chatWindow) chatWindow.classList.toggle('minimized', m);
     if (avatarBtn) avatarBtn.classList.toggle('hidden', !m);
-    if (!m) {
-      chatInput.focus();
-    } else {
+    if (m) {
       stopSpeak();
+      if (isListening && recognition) recognition.stop();
     }
   }
 
   /* ---------- 欢迎语 ---------- */
   function showWelcome() {
-    const welcome = '你好呀～我是风物魔法调色派对的AI向导小风！🎋\n\n在这里，你可以玩消除小游戏收集信阳风物，也可以用AI调色工坊创作专属文创明信片和茶叶礼盒。\n\n有什么想知道的，或者想让我帮你操作什么，随时告诉我哦～';
+    const welcome = '你好呀～我是小风！🎋\n\n你可以直接对着麦克风说话问我问题，或者让我帮你操作界面。比如：「打开游戏」、「选茶叶生成明信片」、「介绍一下信阳毛尖」……\n\n想聊什么，直接说吧～';
     addMessage('assistant', welcome);
     speak(welcome);
   }
@@ -263,11 +325,10 @@ const Assistant = (() => {
     return wrap;
   }
 
-  /* ---------- 发送消息 ---------- */
-  async function sendMessage() {
-    const text = chatInput.value.trim();
-    if (!text) return;
-    chatInput.value = '';
+  /* ---------- 发送消息（语音输入后调用） ---------- */
+  async function sendMessage(text) {
+    if (!text || !text.trim()) return;
+    text = text.trim();
 
     addMessage('user', text);
     chatHistory.push({ role: 'user', content: text });
@@ -288,7 +349,6 @@ const Assistant = (() => {
 
       if (typingEl) typingEl.remove();
 
-      // 处理工具调用
       if (data.tool_calls && data.tool_calls.length > 0) {
         const toolCall = data.tool_calls[0];
         const result = executeToolCall(toolCall.name, toolCall.arguments);
@@ -303,12 +363,10 @@ const Assistant = (() => {
           content: JSON.stringify(result)
         });
 
-        // 显示操作说明
         const actionText = data.reply || `好的，我来帮你${toolNameToText(toolCall.name)}～`;
         addMessage('assistant', actionText);
         speak(actionText);
 
-        // 执行工具后再请求一次 LLM 总结结果（简化：直接用工具返回结果）
         if (result && result.message) {
           setTimeout(() => {
             addMessage('assistant', result.message);
@@ -316,7 +374,6 @@ const Assistant = (() => {
           }, 800);
         }
       } else {
-        // 纯文本回复
         const reply = data.reply || '抱歉，我没听清，能再说一次吗？';
         addMessage('assistant', reply);
         chatHistory.push({ role: 'assistant', content: reply });
@@ -419,7 +476,7 @@ const Assistant = (() => {
     return s ? s.name : id;
   }
 
-  /* ---------- 降级回复（API 失败时用本地规则） ---------- */
+  /* ---------- 降级回复 ---------- */
   function fallbackReply(text) {
     const t = text.toLowerCase();
     if (/你好|hi|hello|在吗|干嘛/i.test(t)) return '你好呀～我是小风！有什么我可以帮你的吗？';

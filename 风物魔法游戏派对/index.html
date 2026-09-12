@@ -259,30 +259,24 @@
 
 <!-- ======== AI 助手「小风」悬浮窗 ======== -->
 <div id="assistantAvatar" class="as-avatar-btn" title="AI 向导小风">
-  <img src="images/assistant-avatar.jpg" class="as-avatar-img idle" alt="小风">
+  <img src="images/assistant-avatar-new.jpg" class="as-avatar-img idle" alt="小风">
 </div>
 
 <div id="assistantWindow" class="as-window minimized">
   <div class="as-header">
-    <img src="images/assistant-avatar.jpg" class="as-header-avatar" alt="小风">
+    <img src="images/assistant-avatar-new.jpg" class="as-header-avatar" alt="小风">
     <div class="as-header-info">
       <div class="as-header-name">AI 向导 · 小风</div>
-      <div class="as-header-status">在线 · 随时为你服务</div>
+      <div class="as-header-status">在线 · 点击麦克风和我对话</div>
     </div>
     <div class="as-header-btns">
-      <button id="assistantSettings" class="as-header-btn" title="语音设置">⚙</button>
       <button id="assistantMute" class="as-header-btn" title="语音开关">🔊</button>
       <button id="assistantClose" class="as-header-btn" title="收起">—</button>
     </div>
   </div>
-  <div id="assistantVoicePanel" class="as-voice-panel hidden">
-    <label class="as-voice-label">选择语音</label>
-    <select id="assistantVoice" class="as-voice-select"></select>
-  </div>
   <div id="assistantMessages" class="as-messages"></div>
   <div class="as-input-area">
-    <input id="assistantInput" class="as-input" type="text" placeholder="和小风聊聊天…" maxlength="200">
-    <button id="assistantSend" class="as-send-btn" title="发送">➤</button>
+    <button id="assistantMic" class="as-mic-btn idle" title="按住说话">🎙</button>
   </div>
 </div>
 
