@@ -76,29 +76,26 @@ const Assistant = (() => {
 
     const loadVoices = () => {
       const voices = speechSynthesis.getVoices();
-      // 固定使用 Microsoft Xiaoxiao
+      // 优先中文女声，找不到就用默认
       voice = voices.find(v => /xiaoxiao/i.test(v.name)) ||
-              voices.find(v => /zh|chinese|中文/i.test(v.lang)) ||
+              voices.find(v => /zh|chinese|中文|cmn/i.test(v.lang)) ||
               voices[0];
-      if (voice) ttsReady = true;
+      ttsReady = true;
     };
 
     loadVoices();
 
-    // 移动端 voices 加载是异步的，需要监听事件
     if (speechSynthesis.onvoiceschanged !== undefined) {
-      speechSynthesis.onvoiceschanged = () => {
-        loadVoices();
-      };
+      speechSynthesis.onvoiceschanged = loadVoices;
     }
-    // iOS Safari 上 voiceschanged 可能不触发，轮询兜底
-    if (!voice) {
+    // Android / iOS 上 voices 可能延迟加载，轮询兜底
+    if (!ttsReady) {
       let attempts = 0;
       const iv = setInterval(() => {
         loadVoices();
         attempts++;
-        if (voice || attempts > 20) clearInterval(iv);
-      }, 200);
+        if (ttsReady || attempts > 30) clearInterval(iv);
+      }, 150);
     }
 
     const savedMute = localStorage.getItem('wm_tts_muted');
@@ -106,27 +103,19 @@ const Assistant = (() => {
     updateMuteIcon();
   }
 
-  /* 分段朗读：按标点切分，逐句播放 */
+  /* 分段朗读 */
   function speak(text) {
     if (!ttsEnabled) return;
-
-    // 移动端延迟初始化：如果 voice 还没加载，先尝试加载再播放
-    if (!voice || !ttsReady) {
-      initTTS();
-      // 延迟 300ms 后重试，给 voices 加载时间
-      setTimeout(() => {
-        if (voice && ttsEnabled) doSpeak(text);
-      }, 300);
-      return;
-    }
+    if (!ttsReady) initTTS();
     doSpeak(text);
   }
 
   function doSpeak(text) {
-    if (!voice || !ttsEnabled) return;
+    if (!ttsEnabled) return;
     stopSpeak();
 
-    // iOS Safari 修复：先 resume 再 speak，解决首次播放无声问题
+    // Android 修复：先 cancel 再 speak，解决某些设备上首次播放卡住
+    speechSynthesis.cancel();
     if (speechSynthesis.paused) speechSynthesis.resume();
 
     const clean = text.replace(/[*_`#]/g, '').replace(/<[^>]+>/g, '');
@@ -150,7 +139,8 @@ const Assistant = (() => {
     }
     const seg = voiceQueue[queueIndex];
     const utter = new SpeechSynthesisUtterance(seg);
-    utter.voice = voice;
+    // 只在找到 voice 时才设置，否则用浏览器默认
+    if (voice) utter.voice = voice;
     utter.lang = 'zh-CN';
     utter.rate = 0.95;
     utter.pitch = 1.0;
@@ -161,13 +151,11 @@ const Assistant = (() => {
       queueIndex++;
       setTimeout(() => playNextSegment(), 300);
     };
-    utter.onerror = (e) => {
-      // iOS 上有时 error 只是被中断，继续下一段
+    utter.onerror = () => {
       queueIndex++;
       setTimeout(() => playNextSegment(), 300);
     };
 
-    // iOS Safari 必须在用户手势之后才能 speak，这里由调用方保证
     speechSynthesis.speak(utter);
   }
 
