@@ -1,9 +1,9 @@
-/* =====================================================
+﻿/* =====================================================
  * sw.js  Service Worker：离线可用（cache-first）
  * 版本升级时修改 CACHE_VERSION 即可让旧缓存失效
  * ===================================================== */
 
-const CACHE_VERSION = 'fengwu-party-v2';
+const CACHE_VERSION = 'fengwu-party-v3';
 
 /* 预缓存清单：应用外壳全部静态资源 */
 const PRECACHE = [

@@ -1,4 +1,4 @@
-/* =====================================================
+﻿/* =====================================================
  * workshop.js  AI调色文创工坊
  * 支持：内置线稿 + 用户上传图片（可改名/删除）
  * 上传图片：按风格套滤镜模拟AI上色，按名字生成藏名小诗
@@ -9,6 +9,22 @@ let wsStyleId = 'spring';   // 选中的色调
 let wsPoem = '';            // AI 生成的小诗
 let wsGenerated = false;    // 是否已生成
 let wsMode = 'postcard';    // 预览模式 postcard | teabox
+
+/* 下载分辨率档位：基准尺寸的 1x/2x/3x 等比放大导出，选择存 localStorage 刷新保持 */
+const WS_RES = {
+  postcard: [
+    { label: '标准', w: 1200, h: 760 },
+    { label: '高清', w: 2400, h: 1520 },
+    { label: '超清', w: 3600, h: 2280 }
+  ],
+  teabox: [
+    { label: '标准', w: 1000, h: 1000 },
+    { label: '高清', w: 2000, h: 2000 },
+    { label: '超清', w: 3000, h: 3000 }
+  ]
+};
+const WS_BASE = { postcard: { w: 1200, h: 760 }, teabox: { w: 1000, h: 1000 } };
+let wsResIdx = Math.min(2, Math.max(0, parseInt(localStorage.getItem('wm_resolution'), 10) || 0)); // 当前档位下标，默认「标准」
 
 /* 版式模板：每种预览模式独立记忆当前模板 */
 const WS_TPLS = {
@@ -251,6 +267,7 @@ function finishGenerate() {
   wsGenerated = true;
 
   document.getElementById('previewModeBar').classList.remove('hidden');
+  renderResSelect();
   renderTplBar();
   document.getElementById('previewTplBar').classList.remove('hidden');
   renderPreview();
@@ -288,8 +305,38 @@ function typePoem(text) {
 function setPreviewMode(mode) {
   wsMode = mode;
   document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  renderResSelect();
   renderTplBar();
   renderPreview();
+}
+
+/* 分辨率 chip 条：按当前预览模式渲染三档（标签含实际像素），选中态存 localStorage 刷新保持 */
+function renderResSelect() {
+  const bar = document.getElementById('resChips');
+  if (!bar) return;
+  const accent = getStyle(wsStyleId).pal.accent;
+  bar.innerHTML = '';
+  WS_RES[wsMode].forEach((r, i) => {
+    const on = i === wsResIdx;
+    const b = document.createElement('button');
+    b.className = 'res-chip' + (on ? ' active' : '');
+    b.textContent = `${r.label} ${r.w}×${r.h}`;
+    b.title = `下载 PNG 分辨率 ${r.w}×${r.h}`;
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    if (on) { b.style.background = accent; b.style.borderColor = accent; }
+    b.onclick = () => setResolution(i);
+    bar.appendChild(b);
+  });
+}
+
+function setResolution(i) {
+  if (i === wsResIdx) return;
+  wsResIdx = i;
+  try { localStorage.setItem('wm_resolution', String(i)); } catch (e) { /* 隐私模式下忽略 */ }
+  SoundFX.click();
+  renderResSelect();
+  const r = WS_RES[wsMode][i];
+  toast(`分辨率：${r.label} ${r.w}×${r.h}`);
 }
 
 /* 模板选择 chip 条：按当前模式渲染，选中态用当前风格 accent 色 */
@@ -511,17 +558,24 @@ async function downloadArtwork() {
   const tpl = wsTpl[wsMode];
   const sealChar = item.name.slice(0, 1);
 
+  /* 分辨率：绘制逻辑仍用基准尺寸坐标，通过 setTransform 等比放大，文字/线稿按矢量精度重绘不模糊；
+     SVG 插画按 scale 请求更大尺寸，保证高分档下同样清晰 */
+  const res = WS_RES[wsMode][wsResIdx];
+  const scale = res.w / WS_BASE[wsMode].w;
+  const sz = n => Math.round(n * scale);
+
   let canvas, ctx;
   if (wsMode === 'postcard') {
     canvas = document.createElement('canvas');
-    canvas.width = 1200; canvas.height = 760;
+    canvas.width = res.w; canvas.height = res.h;
     ctx = canvas.getContext('2d');
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
     ctx.fillStyle = pal.paper; ctx.fillRect(0, 0, 1200, 760);
 
     if (tpl === 'wide') {
       /* 横版全图款：上方大幅横图约 55%，下方标题 + 横排小诗 + 右下小印章 */
       if (item.custom) { ctx.fillStyle = pal.bg; ctx.fillRect(40, 40, 1120, 400); }
-      drawCover(ctx, await getArtImageSlice(item, 1120, 400), 40, 40, 1120, 400);
+      drawCover(ctx, await getArtImageSlice(item, sz(1120), sz(400)), 40, 40, 1120, 400);
       ctx.strokeStyle = pal.main; ctx.lineWidth = 2; ctx.strokeRect(40, 40, 1120, 400);
       // 右上角小邮票框
       ctx.strokeStyle = pal.accent; ctx.lineWidth = 3; ctx.strokeRect(1048, 62, 88, 102);
@@ -554,7 +608,7 @@ async function downloadArtwork() {
       ctx.fillStyle = '#FFF'; ctx.fillRect(-290, -305, 580, 610);
       ctx.strokeStyle = pal.main; ctx.lineWidth = 2; ctx.strokeRect(-290, -305, 580, 610);
       if (item.custom) { ctx.fillStyle = pal.bg; ctx.fillRect(-258, -272, 516, 516); }
-      drawCover(ctx, await getArtImage(item, 516), -258, -272, 516, 516);
+      drawCover(ctx, await getArtImage(item, sz(516)), -258, -272, 516, 516);
       // 顶部半透明胶带（accent 50%）
       ctx.globalAlpha = 0.5; ctx.fillStyle = pal.accent;
       ctx.fillRect(-100, -330, 200, 48);
@@ -580,7 +634,7 @@ async function downloadArtwork() {
       ctx.strokeStyle = pal.main; ctx.lineWidth = 1.5; ctx.strokeRect(40, 40, 1120, 680);
       // 左侧插画
       if (item.custom) { ctx.fillStyle = pal.bg; ctx.fillRect(60, 110, 500, 500); }
-      drawCover(ctx, await getArtImage(item, 500), 60, 110, 500, 500);
+      drawCover(ctx, await getArtImage(item, sz(500)), 60, 110, 500, 500);
       ctx.strokeStyle = pal.main; ctx.lineWidth = 2; ctx.strokeRect(60, 110, 500, 500);
       // 右侧邮票框
       ctx.strokeStyle = pal.accent; ctx.lineWidth = 3; ctx.strokeRect(1000, 80, 120, 140);
@@ -600,8 +654,9 @@ async function downloadArtwork() {
     }
   } else {
     canvas = document.createElement('canvas');
-    canvas.width = 1000; canvas.height = 1000;
+    canvas.width = res.w; canvas.height = res.h;
     ctx = canvas.getContext('2d');
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
     ctx.fillStyle = pal.paper; ctx.fillRect(0, 0, 1000, 1000);
     const tb2 = teaboxText(item);
     const core = tb2.brand.split(' · ')[0];
@@ -622,7 +677,7 @@ async function downloadArtwork() {
       ctx.save();
       rr(ctx, 258, 178, 604, 424, 14); ctx.clip();
       if (item.custom) { ctx.fillStyle = pal.bg; ctx.fillRect(258, 178, 604, 424); }
-      drawCover(ctx, await getArtImageSlice(item, 604, 424), 258, 178, 604, 424);
+      drawCover(ctx, await getArtImageSlice(item, sz(604), sz(424)), 258, 178, 604, 424);
       ctx.restore();
       // 窗下名称与小诗
       ctx.fillStyle = pal.deep; ctx.font = `44px ${KAI}`; ctx.textAlign = 'center';
@@ -655,7 +710,7 @@ async function downloadArtwork() {
       ctx.fillStyle = pal.main; ctx.font = `22px ${KAI}`;
       ctx.fillText(tb2.subEn, 500, 340 + bigSize);
       // 底部小圆图
-      const artM = await getArtImage(item, 260);
+      const artM = await getArtImage(item, sz(260));
       ctx.save();
       ctx.beginPath(); ctx.arc(500, 770, 120, 0, Math.PI * 2); ctx.clip();
       if (item.custom) { ctx.fillStyle = pal.bg; ctx.fillRect(380, 650, 240, 240); }
@@ -679,7 +734,7 @@ async function downloadArtwork() {
       ctx.fillStyle = pal.main; ctx.font = `26px ${KAI}`;
       ctx.fillText(tb2.subEn, 500, 220);
       // 圆形插画
-      const art = await getArtImage(item, 420);
+      const art = await getArtImage(item, sz(420));
       ctx.save();
       ctx.beginPath(); ctx.arc(500, 480, 215, 0, Math.PI * 2); ctx.clip();
       if (item.custom) { ctx.fillStyle = pal.bg; ctx.fillRect(285, 265, 430, 430); }
@@ -703,7 +758,7 @@ async function downloadArtwork() {
   a.download = `${wsMode === 'postcard' ? '明信片' : '茶叶礼盒'}_${item.name}_${style.name}.png`;
   a.href = canvas.toDataURL('image/png');
   a.click();
-  toast('文创成品已保存到本地');
+  toast(`已保存 ${res.w}×${res.h} PNG 到本地`);
 }
 
 /* ---------- 四风格对比：一键生成 2×2 对比图 ---------- */

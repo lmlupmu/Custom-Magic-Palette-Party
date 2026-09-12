@@ -1,4 +1,4 @@
-/* =====================================================
+﻿/* =====================================================
    风物魔法调色派对 · 国风清新 · 青绿主调
    ===================================================== */
 :root {
@@ -283,6 +283,18 @@ main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 60px; }
   padding: 9px 22px; border-radius: 999px; cursor: pointer; transition: all .2s;
 }
 .mode-btn.active { background: var(--green); color: #fff; }
+
+/* 下载分辨率选择 chip 条 */
+.res-chips { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.res-chip {
+  border: 1.5px solid var(--green-soft); background: #fff; color: var(--green-deep);
+  font-family: inherit; font-size: 12px; letter-spacing: 1px;
+  padding: 6px 14px; border-radius: 999px; cursor: pointer; transition: all .2s;
+  white-space: nowrap;
+}
+.res-chip:hover { border-color: var(--green); transform: translateY(-1px); }
+.res-chip.active { color: #fff; box-shadow: 0 3px 10px rgba(31, 106, 91, .18); }
+.res-chip:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 
 /* 明信片 */
 .postcard {
