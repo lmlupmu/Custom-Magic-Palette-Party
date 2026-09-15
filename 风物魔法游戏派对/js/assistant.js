@@ -1,4 +1,4 @@
-/* =====================================================
+﻿/* =====================================================
  * assistant.js  AI 向导「小风」：语音对话 + TTS + 工具调用
  * 纯语音交互：语音识别输入 → AI 回复 → 语音播报输出
  * ===================================================== */
@@ -13,7 +13,6 @@ const Assistant = (() => {
   let avatarBtn = null;
   let micBtn = null;
   let minimized = true;
-  let firstTrigger = true;
   let isListening = false;
   let recognition = null;
   let lastFinalText = '';   // 保存最终识别结果
@@ -34,21 +33,7 @@ const Assistant = (() => {
 
     initTTS();
     initSpeechRecognition();
-
-    // 首次欢迎：点击「开始创作之旅」触发
-    const startBtn = document.querySelector('.btn-primary.btn-big');
-    if (startBtn) {
-      startBtn.addEventListener('click', () => {
-        unlockTTS();
-        if (firstTrigger) {
-          firstTrigger = false;
-          setTimeout(() => {
-            setMinimized(false);
-            showWelcome();
-          }, 600);
-        }
-      });
-    }
+    // 不绑定任何自动唤起：仅点击小风头像图标时才打开助手
   }
 
   /* iOS / Android TTS 解锁 */
