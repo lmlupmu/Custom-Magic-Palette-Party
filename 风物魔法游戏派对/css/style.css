@@ -920,3 +920,9 @@ main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 60px; }
   .as-msg-avatar { width: 34px; height: 34px; }
   .as-listen-hint { font-size: 14px; bottom: 72px; }
 }
+
+/* ---------- 智能体图标 spin 动画（running 状态） ---------- */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

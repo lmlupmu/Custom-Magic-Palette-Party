@@ -461,7 +461,9 @@ function renderAgentResult(agent, result) {
       (result.critique ? `<div class="critique-text">${escapeHtml(result.critique)}</div>` : '') +
       (result.intent ? `<div class="intent-text">创作意图：${escapeHtml(result.intent)}</div>` : '');
   }
-  return `<pre>${escapeHtml(JSON.stringify(result, null, 2))}</pre>`;
+  // 画师失败等空 result：显示友好提示而非 raw JSON
+  if (agent === 'Painter') return `<div class="intent-text">画师智能体未能生成图片（已使用本地滤镜模拟）</div>`;
+  return `<div class="intent-text">${escapeHtml(JSON.stringify(result))}</div>`;
 }
 
 /* ---------- 聊天流：追加最终作品卡片 ---------- */
