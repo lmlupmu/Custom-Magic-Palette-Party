@@ -331,6 +331,7 @@ async function sendChatMessage() {
   const input = document.getElementById('chatInput');
   const userPrompt = (input.value || '').trim();
   input.value = '';
+  input.style.height = 'auto';
 
   // 把用户消息追加到聊天流（空提示给默认文案）
   appendUserMessage(userPrompt || `（默认创作：${item.name} · ${style.name}）`);

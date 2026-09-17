@@ -110,15 +110,22 @@
 
       <!-- 中：对话流 + 输入区 -->
       <div class="ws-chat">
-        <!-- 当前作品工具栏（生成后显示：模式切换 / 模板 / 分辨率 / 对比 / 下载） -->
-        <div id="previewModeBar" class="preview-mode-bar hidden">
-          <button class="mode-btn active" data-mode="postcard" onclick="setPreviewMode('postcard')">明信片</button>
-          <button class="mode-btn" data-mode="teabox" onclick="setPreviewMode('teabox')">茶叶礼盒</button>
-          <button class="btn-ghost" onclick="openStyleCompare()">四风格对比</button>
-          <div id="resChips" class="res-chips" role="group" aria-label="下载 PNG 分辨率"></div>
-          <button class="btn-primary" onclick="downloadArtwork()">下载文创成品</button>
+        <!-- 当前作品台（生成后显示：工具条 + 预览；未生成时整块隐藏） -->
+        <div class="workbench" id="workbench">
+          <div class="wb-bar">
+            <div id="previewModeBar" class="wb-group hidden">
+              <button class="mode-btn active" data-mode="postcard" onclick="setPreviewMode('postcard')">明信片</button>
+              <button class="mode-btn" data-mode="teabox" onclick="setPreviewMode('teabox')">茶叶礼盒</button>
+            </div>
+            <div id="previewTplBar" class="wb-group hidden"></div>
+            <div class="wb-group wb-actions">
+              <div id="resChips" class="res-chips" role="group" aria-label="下载 PNG 分辨率"></div>
+              <button class="btn-ghost wb-ghost" onclick="openStyleCompare()">四风格对比</button>
+              <button class="btn-primary wb-download" onclick="downloadArtwork()">下载成品</button>
+            </div>
+          </div>
+          <div id="previewResult" class="preview-result hidden"></div>
         </div>
-        <div id="previewTplBar" class="preview-tpl-bar hidden"></div>
 
         <!-- 聊天流：分步智能体协作过程 + 作品卡片（图+诗+评论） -->
         <div id="chatStream" class="chat-stream">
@@ -132,14 +139,11 @@
           </div>
         </div>
 
-        <!-- 预览成果区（嵌入聊天流末尾，含图+诗+评论+下载） -->
-        <div id="previewResult" class="preview-result hidden"></div>
-
         <!-- 输入区：工具快捷条 + 输入框 + 发送键 -->
         <div class="chat-input-area">
           <div id="toolChips" class="tool-chips"></div>
           <div class="chat-input-row">
-            <textarea id="chatInput" class="chat-input" rows="2" placeholder="说说你的想法，或双击左侧风物、右侧风格一键生成…"></textarea>
+            <textarea id="chatInput" class="chat-input" rows="1" placeholder="说说你的想法，或双击左侧风物、右侧风格一键生成…"></textarea>
             <button id="chatSend" class="chat-send" onclick="sendChatMessage()">发送</button>
           </div>
         </div>
