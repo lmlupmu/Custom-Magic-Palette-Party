@@ -50,6 +50,75 @@ async function extractImageBase64(response) {
   throw new Error('Unknown image response format');
 }
 
+/* ---------- Planner 智能体：Qwen3 真正解析用户意图，决定最终风格+约束 ---------- */
+async function runPlanner(env, item, style, userPrompt) {
+  /* 无用户输入：直接返回默认规划，不浪费一次 AI 调用 */
+  if (!userPrompt || userPrompt.trim().length < 2) {
+    return {
+      finalStyle: style,
+      customPrompt: '',
+      intent: `按「${style.name}」风格创作${item.name}文创`
+    };
+  }
+
+  const styleList = Object.values(STYLE_BY_ID)
+    .map(s => `- ${s.id}：${s.name}（${s.desc}）`).join('\n');
+
+  const prompt = `你是一位国风文创规划智能体。请分析用户的创作要求，输出结构化 JSON 指令。
+
+当前风物：${item.name}${item.alias ? `（${item.alias}）` : ''}
+当前风格：${style.name} — ${style.desc}
+可选风格（按 id 选择）：
+${styleList}
+
+用户要求：${userPrompt}
+
+请判断：
+1. 用户是否想换风格？关键词映射：
+   - 黑白/水墨/写意/留白 → ink（淡雅水墨）
+   - 春/青绿/嫩芽/雨前 → spring（春日青绿）
+   - 秋/金黄/赅黄/丰收/暖阳 → autumn（秋意赅黄）
+   - 国潮/艳/彩/年轻 → guochao（国潮艳彩）
+   - 如未提风格，沿用当前 finalStyleId
+2. customPrompt：提炼用户想法为 50 字内创作约束（保留用户原意，可补风格特征）
+3. intent：一句话说明规划结论
+
+严格输出 JSON（不要 markdown 代码块，不要解释）：
+{"finalStyleId":"<spring|autumn|guochao|ink>","customPrompt":"<50字内创作约束>","intent":"<一句话规划结论>"}`;
+
+  const response = await env.AI.run('@cf/qwen/qwen3-30b-a3b-fp8', {
+    messages: [
+      { role: 'system', content: '你是国风文创规划智能体，擅长解析用户意图并输出 JSON 指令。只输出 JSON，不加任何解释。' },
+      { role: 'user', content: prompt }
+    ],
+    temperature: 0.3,
+    max_tokens: 200
+  });
+
+  let text = '';
+  if (response.choices && response.choices[0]) text = response.choices[0].message.content;
+  else if (response.response) text = response.response;
+
+  const match = text.match(/\{[\s\S]*\}/);
+  if (match) {
+    try {
+      const parsed = JSON.parse(match[0]);
+      const finalStyle = STYLE_BY_ID[parsed.finalStyleId] || style;
+      return {
+        finalStyle,
+        customPrompt: (parsed.customPrompt || userPrompt).slice(0, 100),
+        intent: parsed.intent || `按「${finalStyle.name}」风格创作`
+      };
+    } catch (e) {}
+  }
+  /* 解析失败：返回默认（保留原 style 和 userPrompt） */
+  return {
+    finalStyle: style,
+    customPrompt: userPrompt,
+    intent: `按「${style.name}」风格创作`
+  };
+}
+
 /* ---------- Poet 智能体：Qwen3 写七言绝句 ---------- */
 async function runPoet(env, item, style, userPrompt) {
   const prompt = `你是一位国风诗人。请为以下风物创作一首四句七言国风小诗。
@@ -64,7 +133,7 @@ ${item.custom ? '这是用户自定义上传的风物，请将风物名融入诗
 
   const response = await env.AI.run('@cf/qwen/qwen3-30b-a3b-fp8', {
     messages: [
-      { role: 'system', content: '你是一位专精国风诗词的AI诗人，擅长即兴创作七言绝句。只输出诗句，不加任何额外文字。' },
+      { role: 'system', content: '你是一位专精国风诗词的AI诗人，擅长即兴创作七言绝句。只输出四句七言诗，每句一行，不加任何标题、序号、解释或额外文字。' },
       { role: 'user', content: prompt }
     ],
     temperature: 0.85,
@@ -74,8 +143,23 @@ ${item.custom ? '这是用户自定义上传的风物，请将风物名融入诗
   let poem = '';
   if (response.choices && response.choices[0]) poem = response.choices[0].message.content;
   else if (response.response) poem = response.response;
+  else if (typeof response === 'string') poem = response;
 
-  poem = poem.replace(/^[\d\s•\-、。.]+/gm, '').replace(/["""''"]/g, '').trim();
+  /* 温和清洗：去掉行首数字序号、中文序号、首尾引号、HTML 标签；保留正文每个字 */
+  poem = (poem || '')
+    .replace(/^[\d]+\s*[\.、．)]?\s*/gm, '')              // 行首数字序号 1. 1、 1)
+    .replace(/^[一二三四五六七八九十百]+[、.．]\s*/gm, '')   // 中文序号 一、 二.
+    .replace(/^[•·●▪\-–—]+\s*/gm, '')                    // 行首项目符号
+    .replace(/^["""'']+|["""'']+$/gm, '')                 // 行首行尾引号
+    .replace(/^```[a-z]*$|^```$/gm, '')                   // 代码块标记
+    .replace(/<[^>]+>/g, '')                              // HTML 标签
+    .replace(/\n{3,}/g, '\n\n')                           // 多空行压缩
+    .trim();
+
+  /* 兜底校验：至少要有两行非空内容才返回，否则返回空让前端 fallback */
+  const lines = poem.split('\n').filter(l => l.trim());
+  if (lines.length < 2) return '';
+
   return poem;
 }
 
@@ -183,21 +267,28 @@ export async function onRequestPost({ request, env }) {
       async start(controller) {
         const send = (obj) => controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'));
 
-        /* Step 1: Planner 规划智能体（解析意图） */
+        /* Step 1: Planner 规划智能体（真正调 LLM 解析用户意图，可能切换风格） */
         send({ agent: 'Planner', status: 'running', message: '正在理解你的创作意图…' });
-        await new Promise(r => setTimeout(r, 300));
-        const planText = `风物：${item.name}${item.alias ? ' · ' + item.alias : ''}，风格：${style.name}${userPrompt ? '，你的想法：「' + userPrompt + '」' : ''}`;
+        const plan = await runPlanner(env, item, style, userPrompt).catch(() => ({
+          finalStyle: style,
+          customPrompt: userPrompt,
+          intent: `按「${style.name}」风格创作`
+        }));
+        const finalStyle = plan.finalStyle;
+        const finalPrompt = plan.customPrompt;
+        const styleChanged = finalStyle.id !== style.id;
+        const planText = `风物：${item.name}${item.alias ? ' · ' + item.alias : ''}，风格：${finalStyle.name}${styleChanged ? `（由「${style.name}」切换）` : ''}${finalPrompt ? '，创作约束：「' + finalPrompt + '」' : ''} · ${plan.intent}`;
         send({ agent: 'Planner', status: 'done', message: planText });
 
-        /* Step 2: Poet + Painter 并行 */
+        /* Step 2: Poet + Painter 并行（使用 Planner 解析后的 finalStyle 和 finalPrompt） */
         send({ agent: 'Poet', status: 'running', message: '诗人智能体正在吟咏国风小诗…' });
         if (item.custom) {
           send({ agent: 'Painter', status: 'running', message: '画师智能体正在风格化你的图片…' });
         }
 
         const [poem, image] = await Promise.all([
-          runPoet(env, item, style, userPrompt).catch(() => null),
-          item.custom ? runPainter(env, item, style).catch(() => null) : Promise.resolve(null)
+          runPoet(env, item, finalStyle, finalPrompt).catch(() => null),
+          item.custom ? runPainter(env, item, finalStyle).catch(() => null) : Promise.resolve(null)
         ]);
 
         send({ agent: 'Poet', status: 'done', result: { poem: poem || '' } });
@@ -205,23 +296,23 @@ export async function onRequestPost({ request, env }) {
 
         /* Step 3: Critic 评论智能体（依赖诗+图结果） */
         send({ agent: 'Critic', status: 'running', message: '评论家智能体正在为作品命名与短评…' });
-        const critique = await runCritic(env, item, style, poem || '', userPrompt).catch(() => ({
-          title: `${item.name}·${style.name}`,
+        const critique = await runCritic(env, item, finalStyle, poem || '', finalPrompt).catch(() => ({
+          title: `${item.name}·${finalStyle.name}`,
           critique: 'AI 文创作品。',
           intent: '智能体协作生成。'
         }));
         send({ agent: 'Critic', status: 'done', result: critique });
 
-        /* Done：汇总结果 */
+        /* Done：汇总结果（用 finalStyle 让前端作品卡显示正确风格） */
         send({
           done: true,
           poem: poem || '',
           image: image || '',
-          title: critique.title || `${item.name}·${style.name}`,
+          title: critique.title || `${item.name}·${finalStyle.name}`,
           critique: critique.critique || '',
-          intent: critique.intent || '',
+          intent: critique.intent || plan.intent,
           item: { id: item.id, name: item.name, alias: item.alias || '', custom: !!item.custom },
-          style: { id: style.id, name: style.name, desc: style.desc }
+          style: { id: finalStyle.id, name: finalStyle.name, desc: finalStyle.desc }
         });
 
         controller.close();
