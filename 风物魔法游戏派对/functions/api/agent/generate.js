@@ -142,6 +142,26 @@ ${poem || '（无诗）'}
   };
 }
 
+/* ---------- onRequestOptions：CORS 预检 ---------- */
+export function onRequestOptions() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '86400'
+    }
+  });
+}
+
+/* 给所有响应加 CORS 头（同源场景无害，跨域场景必需） */
+function corsHeaders(res) {
+  const h = new Headers(res.headers);
+  h.set('Access-Control-Allow-Origin', '*');
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h });
+}
+
 /* ---------- onRequestPost：编排主流程 ---------- */
 export async function onRequestPost({ request, env }) {
   try {
@@ -208,14 +228,14 @@ export async function onRequestPost({ request, env }) {
       }
     });
 
-    return new Response(stream, {
+    return corsHeaders(new Response(stream, {
       headers: {
         'Content-Type': 'application/x-ndjson; charset=utf-8',
         'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive'
       }
-    });
+    }));
   } catch (err) {
-    return Response.json({ error: err.message }, { status: 500 });
+    return corsHeaders(Response.json({ error: err.message }, { status: 500 }));
   }
 }
