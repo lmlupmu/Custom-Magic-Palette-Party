@@ -388,6 +388,18 @@ async function sendChatMessage() {
 
     if (!doneEvent) throw new Error('未收到完成事件');
 
+    /* Planner 可能切换了风格：用 done 事件返回的 finalStyle 更新 style 变量 */
+    let finalStyle = style;
+    if (doneEvent.style && doneEvent.style.id && doneEvent.style.id !== style.id) {
+      const switched = getStyle(doneEvent.style.id);
+      if (switched) {
+        finalStyle = switched;
+        wsStyleId = switched.id;   // 同步全局状态，方便后续生成沿用新风格
+        renderStyles();             // 右栏风格列表同步高亮新风格
+        renderToolChips();          // 工具 chip 同步更新
+      }
+    }
+
     // 回填全局状态
     wsPoem = doneEvent.poem || fallbackPoem(item, wsStyleId);
     wsAiImage = doneEvent.image || null;
@@ -396,11 +408,11 @@ async function sendChatMessage() {
     // 渲染当前作品预览区（含模式/模板/分辨率/下载）
     finishGenerate();
 
-    // 聊天流末尾追加一张作品卡片（图+诗+评论+意图）
-    appendWorkCard(item, style, wsPoem, wsAiImage, doneEvent.title, doneEvent.critique, doneEvent.intent);
+    // 聊天流末尾追加一张作品卡片（用 finalStyle 让配色匹配新风格）
+    appendWorkCard(item, finalStyle, wsPoem, wsAiImage, doneEvent.title, doneEvent.critique, doneEvent.intent);
 
     // 右栏历史列表追加
-    appendHistory(item, style, wsPoem, wsAiImage, doneEvent.title, doneEvent.critique, doneEvent.intent);
+    appendHistory(item, finalStyle, wsPoem, wsAiImage, doneEvent.title, doneEvent.critique, doneEvent.intent);
 
     SoundFX.generate();
     toast('智能体协作完成，可下载或继续对话修改');
@@ -437,17 +449,38 @@ function appendUserMessage(text) {
 function appendAgentStep(agent, status, message, result) {
   const stream = document.getElementById('chatStream');
   const meta = AGENT_META[agent] || { tag: agent, icon: '?', cls: 'agent' };
-  const card = document.createElement('div');
+
+  /* 复用同一智能体的卡片：running → done 只更新同一张而非新建 */
+  let card = stream.querySelector(`[data-agent-step="${agent}"]`);
+  if (!card) {
+    card = document.createElement('div');
+    card.dataset.agentStep = agent;
+    card.dataset.agent = agent;
+    card.innerHTML = `
+      <div class="agent-icon">${meta.icon}</div>
+      <div class="agent-body">
+        <div class="agent-name">${meta.tag}</div>
+        <div class="agent-msg"></div>
+      </div>`;
+    stream.appendChild(card);
+  }
+
+  /* 更新状态 class（CSS 用 .agent-step.running / .agent-step.done 控制边框和 spin 动画） */
   card.className = `agent-step ${status}`;
-  card.dataset.agent = agent;
-  card.innerHTML = `
-    <div class="agent-icon">${meta.icon}</div>
-    <div class="agent-body">
-      <div class="agent-name">${meta.tag}</div>
-      <div class="agent-msg">${escapeHtml(message || '')}</div>
-      ${result ? `<div class="agent-result">${renderAgentResult(agent, result)}</div>` : ''}
-    </div>`;
-  stream.appendChild(card);
+
+  const body = card.querySelector('.agent-body');
+  if (message) body.querySelector('.agent-msg').textContent = message;
+
+  /* 移除旧 result，追加新的（done 事件带 result 时） */
+  const oldResult = body.querySelector('.agent-result');
+  if (oldResult) oldResult.remove();
+  if (result) {
+    const resultEl = document.createElement('div');
+    resultEl.className = 'agent-result';
+    resultEl.innerHTML = renderAgentResult(agent, result);
+    body.appendChild(resultEl);
+  }
+
   stream.scrollTop = stream.scrollHeight;
 }
 
