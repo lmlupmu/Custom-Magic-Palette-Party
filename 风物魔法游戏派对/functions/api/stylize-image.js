@@ -1,6 +1,6 @@
 const STYLE_PROMPTS = {
   '春日青绿': 'Traditional Chinese ink painting, spring green palette, fresh vibrant, elegant botanical art',
-  '秋意赅黄': 'Traditional Chinese ink painting, autumn golden brown palette, warm harvest colors',
+  '秋意赭黄': 'Traditional Chinese ink painting, autumn golden brown palette, warm harvest colors',
   '国潮艳彩': 'Chinese guochao art style, bold vibrant saturated colors, modern traditional fusion',
   '淡雅水墨': 'Chinese ink wash painting, minimalist black and white, zen aesthetic, subtle brushwork'
 };

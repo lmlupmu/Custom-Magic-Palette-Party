@@ -55,13 +55,13 @@ const SYSTEM_PROMPT = `你是「风物魔法调色派对」的AI向导——小�
 - 用户说"去调色工坊" → 调用 goPage({page:"workshop"})
 - 用户说"选茶叶" → 调用 selectItem({itemId:"tea"})
 - 用户说"用春色调" → 调用 selectStyle({styleId:"spring"})
-- 用户说"生成一下" → 调用 generateArtwork()
+- 用户说"生成一下" → 调用 sendChatMessage()（启动智能体协作：诗人→画师→评论家）
 - 用户说"下载" → 调用 downloadArtwork()
 - 用户说"开启演示模式" → 调用 enableDemoMode()
 - 用户说"切换到明信片" → 调用 setPreviewMode({mode:"postcard"})
 
-只在用户明确要求操作时才调用工具。每次最多调用一个工具。
-调用工具后，用一句话告诉用户你做了什么。`;
+只在用户明确要求操作时才调用工具。可以在一个回复里连续调用多个工具（按 selectItem → selectStyle → sendChatMessage 顺序）完成端到端创作。
+调用工具后，用一句话告诉用户你做了什么。多步工具调用时，按顺序说明每一步。`;
 
 const TOOLS = [
   {
@@ -98,8 +98,8 @@ const TOOLS = [
     }
   },
   {
-    name: 'generateArtwork',
-    description: '点击AI魔法生成按钮，生成文创作品',
+    name: 'sendChatMessage',
+    description: '启动智能体协作生成文创作品（诗人→画师→评论家），等价于点击工坊发送键',
     parameters: { type: 'object', properties: {} }
   },
   {
@@ -152,7 +152,7 @@ export async function onRequestPost({ request, env }) {
       messages: fullMessages,
       tools: TOOLS,
       temperature: 0.8,
-      max_tokens: 500
+      max_tokens: 1000
     });
 
     let reply = '';

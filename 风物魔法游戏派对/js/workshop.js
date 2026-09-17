@@ -10,6 +10,16 @@ let wsPoem = '';            // AI 生成的小诗
 let wsGenerated = false;    // 是否已生成
 let wsAiImage = null;       // AI 风格化后的图片（dataURL），null 时回退 CSS 滤镜
 let wsMode = 'postcard';    // 预览模式 postcard | teabox
+let wsHistory = [];         // 历史作品 [{item, style, poem, image, title, critique, intent}]
+let wsChatBusy = false;     // 智能体协作生成中（防止并发触发）
+
+/* 智能体元信息：标签 / 头像字 / 样式类 */
+const AGENT_META = {
+  Planner: { tag: '规划', icon: '策', cls: 'planner' },
+  Poet:    { tag: '诗人', icon: '诗', cls: 'poet' },
+  Painter: { tag: '画师', icon: '画', cls: 'painter' },
+  Critic:  { tag: '评论家', icon: '评', cls: 'critic' }
+};
 
 /* 下载分辨率档位：基准尺寸的 1x/2x/3x 等比放大导出，选择存 localStorage 刷新保持 */
 const WS_RES = {
@@ -69,6 +79,12 @@ function renderGallery() {
       if (!isUnlocked) { toast('该线稿未解锁，先去消除小游戏通关收集吧'); return; }
       selectItem(item.id);
     };
+    /* 双击：直接触发智能体协作生成 */
+    cell.ondblclick = () => {
+      if (!isUnlocked) return;
+      selectItem(item.id);
+      sendChatMessage();
+    };
     grid.appendChild(cell);
   });
 
@@ -81,6 +97,7 @@ function renderGallery() {
       <span>${c.name}</span>
       <button class="g-rename">改名</button>`;
     cell.querySelector('.g-art').onclick = () => selectItem(c.id);
+    cell.querySelector('.g-art').ondblclick = (e) => { e.stopPropagation(); selectItem(c.id); sendChatMessage(); };
     cell.querySelector('.g-rename').onclick = (e) => { e.stopPropagation(); renameCustom(c.id); };
     cell.querySelector('.g-del').onclick = (e) => { e.stopPropagation(); deleteCustom(c.id); };
     grid.appendChild(cell);
@@ -98,7 +115,7 @@ function renderGallery() {
     wsItemId = unlocked[0] || (customs[0] && customs[0].id) || null;
   }
   markActiveCell();
-  renderPreviewLineArt();
+  renderToolChips();
 }
 
 function markActiveCell() {
@@ -165,37 +182,65 @@ async function deleteCustom(id) {
   toast('已删除');
 }
 
-/* ---------- 选中与预览（生成前） ---------- */
+/* ---------- 选中风物：单击填参到工具 chip 条，不直接生成 ---------- */
 function selectItem(id) {
   wsItemId = id;
   wsGenerated = false;
   wsAiImage = null;
   markActiveCell();
-  document.getElementById('poemBox').classList.add('hidden');
+  // 清空当前作品预览区（保留对话流历史）
+  const previewResult = document.getElementById('previewResult');
+  if (previewResult) { previewResult.classList.add('hidden'); previewResult.innerHTML = ''; }
   document.getElementById('previewModeBar').classList.add('hidden');
   document.getElementById('previewTplBar').classList.add('hidden');
-  document.getElementById('previewResult').classList.add('hidden');
-  document.getElementById('previewEmpty').classList.remove('hidden');
-  renderPreviewLineArt();
+  renderToolChips();
   SoundFX.click();
 }
 
-function renderPreviewLineArt() {
+/* ---------- 工具 chip 条：当前选中的风物 + 风格（输入框上方） ---------- */
+function renderToolChips() {
+  const bar = document.getElementById('toolChips');
+  if (!bar) return;
   const item = getWsItem();
-  if (!item) return;
-  const box = document.getElementById('previewLineArt');
-  if (item.custom) {
-    box.innerHTML = `<img class="preview-custom-img" src="${item.img}" alt="${item.name}">`;
-    document.getElementById('previewHintText').textContent =
-      `已选中你的风物「${item.name}」，选择色调后点击「AI魔法生成」`;
+  const style = getStyle(wsStyleId);
+  bar.innerHTML = '';
+  if (item) {
+    const chip = document.createElement('span');
+    chip.className = 'tool-chip item';
+    chip.innerHTML = `<span class="tool-chip-label">风物</span><span class="tool-chip-value">${escapeHtml(item.name)}</span>`;
+    chip.title = '点击移除当前风物选择';
+    chip.onclick = () => { wsItemId = null; wsGenerated = false; markActiveCell(); renderToolChips(); };
+    bar.appendChild(chip);
   } else {
-    box.innerHTML = sizedSvg(item.build(LINE_PAL, true), 300, 300);
-    document.getElementById('previewHintText').textContent =
-      `已选中「${item.name} · ${item.alias}」线稿，选择色调后点击「AI魔法生成」`;
+    const chip = document.createElement('span');
+    chip.className = 'tool-chip empty';
+    chip.textContent = '请双击左侧风物';
+    bar.appendChild(chip);
+  }
+  if (style) {
+    const chip = document.createElement('span');
+    chip.className = 'tool-chip style';
+    chip.innerHTML = `<span class="tool-chip-label">风格</span><span class="tool-chip-value">${escapeHtml(style.name)}</span>`;
+    bar.appendChild(chip);
   }
 }
 
-/* ---------- 色调风格 ---------- */
+/* ---------- 色调风格：单击切换 / 双击直接生成 ---------- */
+function selectStyle(id) {
+  wsStyleId = id;
+  wsGenerated = false;
+  wsAiImage = null;
+  SoundFX.click();
+  renderStyles();
+  renderToolChips();
+  if (!document.getElementById('previewResult').classList.contains('hidden')) {
+    document.getElementById('previewResult').classList.add('hidden');
+    document.getElementById('previewResult').innerHTML = '';
+    document.getElementById('previewModeBar').classList.add('hidden');
+    document.getElementById('previewTplBar').classList.add('hidden');
+  }
+}
+
 function renderStyles() {
   const list = document.getElementById('styleList');
   list.innerHTML = '';
@@ -210,30 +255,13 @@ function renderStyles() {
       <div class="style-dots">
         ${['main', 'sub', 'deep', 'accent'].map(k => `<i style="background:${s.pal[k]}"></i>`).join('')}
       </div>`;
-    el.onclick = () => {
-      wsStyleId = s.id;
-      wsGenerated = false;
-      wsAiImage = null;
-      SoundFX.click();
-      renderStyles();
-      renderTplBar();
-      if (!document.getElementById('previewResult').classList.contains('hidden')) {
-        document.getElementById('previewResult').classList.add('hidden');
-        document.getElementById('previewEmpty').classList.remove('hidden');
-        document.getElementById('previewModeBar').classList.add('hidden');
-        document.getElementById('previewTplBar').classList.add('hidden');
-        document.getElementById('poemBox').classList.add('hidden');
-      }
-    };
+    el.onclick = () => selectStyle(s.id);
+    el.ondblclick = () => { selectStyle(s.id); sendChatMessage(); };
     list.appendChild(el);
   });
 }
 
-/* ---------- AI 魔法生成 ---------- */
-const AI_STEPS = ['AI 正在理解线稿结构…', 'AI 正在调配艺术色彩…', 'AI 正在吟咏国风小诗…', 'AI 正在装裱文创成品…'];
-const AI_STEPS_CUSTOM = ['AI 正在识别你的风物…', 'AI 正在分析名字意境…', 'AI 正在吟咏专属小诗…', 'AI 正在装裱文创成品…'];
-
-/* ---------- 真实 AI API 调用（Cloudflare Workers AI） ---------- */
+/* ---------- 真实 AI API 调用（fallback，主路径走 /api/agent/generate） ---------- */
 async function callAIPoem(item, style) {
   try {
     const resp = await fetch('/api/generate-poem', {
@@ -290,93 +318,226 @@ function fallbackPoem(item, styleId) {
   return bank ? bank[styleId] : POEMS.tea.spring;
 }
 
-async function generateArtwork() {
+/* ---------- 智能体协作：发送想法 → 流式生成 ---------- */
+async function sendChatMessage() {
+  if (wsChatBusy) { toast('智能体正在创作中，请稍候…'); return; }
   const item = getWsItem();
   if (!item) { toast('请先在左侧选择一张已解锁的风物线稿'); return; }
-  const btn = document.getElementById('btnMagic');
-  btn.disabled = true;
-
-  document.getElementById('previewEmpty').classList.add('hidden');
-  document.getElementById('previewResult').classList.add('hidden');
-  document.getElementById('previewModeBar').classList.add('hidden');
-  document.getElementById('previewTplBar').classList.add('hidden');
-  document.getElementById('poemBox').classList.add('hidden');
-  const loading = document.getElementById('aiLoading');
-  const loadingText = document.getElementById('aiLoadingText');
-  loading.classList.remove('hidden');
-
   const style = getStyle(wsStyleId);
-  const steps = item.custom ? AI_STEPS_CUSTOM : AI_STEPS;
-  let step = 0;
-  loadingText.textContent = steps[0];
-  const timer = setInterval(() => {
-    step = (step + 1) % steps.length;
-    loadingText.textContent = steps[step];
-  }, 1000);
+  if (!style) { toast('请选择一种色调风格'); return; }
+
+  const input = document.getElementById('chatInput');
+  const userPrompt = (input.value || '').trim();
+  input.value = '';
+
+  // 把用户消息追加到聊天流（空提示给默认文案）
+  appendUserMessage(userPrompt || `（默认创作：${item.name} · ${style.name}）`);
+
+  // 请求体：自定义风物附带图片和名字
+  const body = {
+    itemId: item.id,
+    styleId: wsStyleId,
+    userPrompt,
+    customImage: item.custom ? item.img : undefined,
+    customName: item.custom ? item.name : undefined
+  };
+
+  wsChatBusy = true;
+  const sendBtn = document.getElementById('chatSend');
+  sendBtn.disabled = true;
+  sendBtn.textContent = '生成中';
 
   try {
-    const [aiPoem, aiImage] = await Promise.all([
-      callAIPoem(item, style),
-      callAIStylize(item, style)
-    ]);
+    const resp = await fetch('/api/agent/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!resp.ok || !resp.body) throw new Error('agent API ' + resp.status);
 
-    clearInterval(timer);
-    loading.classList.add('hidden');
+    // NDJSON 流式解析：每行一个事件 JSON
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let doneEvent = null;
 
-    wsPoem = aiPoem || fallbackPoem(item, wsStyleId);
-    wsAiImage = aiImage;
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // 末尾可能不完整，留到下次
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        let evt;
+        try { evt = JSON.parse(line); } catch (e) { continue; }
+        if (evt.done) {
+          doneEvent = evt;
+        } else if (evt.agent) {
+          appendAgentStep(evt.agent, evt.status, evt.message, evt.result);
+        }
+      }
+    }
+    if (buffer.trim()) {
+      try {
+        const evt = JSON.parse(buffer);
+        if (evt.done) doneEvent = evt;
+        else if (evt.agent) appendAgentStep(evt.agent, evt.status, evt.message, evt.result);
+      } catch (e) { /* 忽略末尾残片 */ }
+    }
 
-    if (!aiPoem) toast('AI 诗词服务暂不可用，已使用本地诗库');
-    if (item.custom && !aiImage) toast('AI 图像风格化暂不可用，已使用滤镜模拟');
+    if (!doneEvent) throw new Error('未收到完成事件');
+
+    // 回填全局状态
+    wsPoem = doneEvent.poem || fallbackPoem(item, wsStyleId);
+    wsAiImage = doneEvent.image || null;
+    wsGenerated = true;
+
+    // 渲染当前作品预览区（含模式/模板/分辨率/下载）
     finishGenerate();
+
+    // 聊天流末尾追加一张作品卡片（图+诗+评论+意图）
+    appendWorkCard(item, style, wsPoem, wsAiImage, doneEvent.title, doneEvent.critique, doneEvent.intent);
+
+    // 右栏历史列表追加
+    appendHistory(item, style, wsPoem, wsAiImage, doneEvent.title, doneEvent.critique, doneEvent.intent);
+
+    SoundFX.generate();
+    toast('智能体协作完成，可下载或继续对话修改');
   } catch (e) {
-    clearInterval(timer);
-    loading.classList.add('hidden');
+    console.error('agent generate failed', e);
+    // 回退到本地诗库 + 滤镜模拟
     wsPoem = fallbackPoem(item, wsStyleId);
     wsAiImage = null;
+    wsGenerated = true;
     finishGenerate();
-    toast('AI 服务暂时不可用，已使用本地生成');
+    appendWorkCard(item, style, wsPoem, null,
+      `${item.name}·${style.name}`,
+      '智能体服务暂不可用，已使用本地诗库 + 滤镜模拟生成。',
+      'fallback 本地生成');
+    toast('智能体服务暂不可用，已使用本地生成');
   } finally {
-    btn.disabled = false;
+    wsChatBusy = false;
+    sendBtn.disabled = false;
+    sendBtn.textContent = '发送';
   }
 }
 
-function finishGenerate() {
-  const item = getWsItem();
-  const style = getStyle(wsStyleId);
-  wsGenerated = true;
+/* ---------- 聊天流：追加用户消息 ---------- */
+function appendUserMessage(text) {
+  const stream = document.getElementById('chatStream');
+  const msg = document.createElement('div');
+  msg.className = 'chat-msg user';
+  msg.innerHTML = `<div class="chat-bubble">${escapeHtml(text)}</div><div class="chat-avatar user">我</div>`;
+  stream.appendChild(msg);
+  stream.scrollTop = stream.scrollHeight;
+}
 
+/* ---------- 聊天流：追加智能体步骤卡片 ---------- */
+function appendAgentStep(agent, status, message, result) {
+  const stream = document.getElementById('chatStream');
+  const meta = AGENT_META[agent] || { tag: agent, icon: '?', cls: 'agent' };
+  const card = document.createElement('div');
+  card.className = `agent-step ${status}`;
+  card.dataset.agent = agent;
+  card.innerHTML = `
+    <div class="agent-icon">${meta.icon}</div>
+    <div class="agent-body">
+      <div class="agent-name">${meta.tag}</div>
+      <div class="agent-msg">${escapeHtml(message || '')}</div>
+      ${result ? `<div class="agent-result">${renderAgentResult(agent, result)}</div>` : ''}
+    </div>`;
+  stream.appendChild(card);
+  stream.scrollTop = stream.scrollHeight;
+}
+
+/* 智能体 result 渲染：按 agent 类型差异化展示诗/图/评论（CSS 已有对应 class） */
+function renderAgentResult(agent, result) {
+  if (!result) return '';
+  if (result.poem) return `<div class="poem-text">${escapeHtml(result.poem)}</div>`;
+  if (result.image) return `<img src="${result.image}" alt="画师生成">`;
+  if (result.title) {
+    return `<strong>${escapeHtml(result.title)}</strong>` +
+      (result.critique ? `<div class="critique-text">${escapeHtml(result.critique)}</div>` : '') +
+      (result.intent ? `<div class="intent-text">创作意图：${escapeHtml(result.intent)}</div>` : '');
+  }
+  return `<pre>${escapeHtml(JSON.stringify(result, null, 2))}</pre>`;
+}
+
+/* ---------- 聊天流：追加最终作品卡片 ---------- */
+function appendWorkCard(item, style, poem, image, title, critique, intent) {
+  const stream = document.getElementById('chatStream');
+  const pal = style.pal;
+  const card = document.createElement('div');
+  card.className = 'work-card';
+  card.style.borderColor = pal.main;
+  card.innerHTML = `
+    <div class="work-title" style="color:${pal.deep}">${escapeHtml(title || `${item.name}·${style.name}`)}</div>
+    ${image ? `<div class="work-preview"><img src="${image}" alt="${escapeHtml(item.name)}" style="max-width:100%;border-radius:8px;border:1.5px solid ${pal.main}"></div>` : ''}
+    <div class="work-poem" style="color:${pal.deep}">${escapeHtml(poem)}</div>
+    ${critique ? `<div class="work-critique">${escapeHtml(critique)}</div>` : ''}
+    ${intent ? `<div class="work-intent">创作意图：${escapeHtml(intent)}</div>` : ''}`;
+  stream.appendChild(card);
+  stream.scrollTop = stream.scrollHeight;
+}
+
+/* ---------- 右栏历史列表 ---------- */
+function appendHistory(item, style, poem, image, title, critique, intent) {
+  const list = document.getElementById('historyList');
+  if (!list) return;
+  const idx = wsHistory.length;
+  wsHistory.push({ item: { id: item.id, name: item.name, alias: item.alias, custom: !!item.custom, img: item.img }, style: { id: style.id, name: style.name, pal: style.pal }, poem, image, title, critique, intent });
+  // 移除空状态
+  const empty = list.querySelector('.history-empty');
+  if (empty) empty.remove();
+
+  const el = document.createElement('div');
+  el.className = 'history-item';
+  const thumbHtml = image
+    ? `<img src="${image}" alt="${escapeHtml(item.name)}">`
+    : (item.build ? sizedSvg(item.build(style.pal, true), 60, 60) : `<div class="history-thumb-ph">${escapeHtml(item.name.slice(0, 1))}</div>`);
+  el.innerHTML = `
+    <div class="history-thumb">${thumbHtml}</div>
+    <div class="history-meta">
+      <div class="history-title">${escapeHtml(title || item.name)}</div>
+      <div class="history-sub">${escapeHtml(item.name)} · ${escapeHtml(style.name)}</div>
+    </div>`;
+  el.onclick = () => restoreHistory(idx);
+  list.insertBefore(el, list.firstChild);
+}
+
+/* 点击历史项：恢复到当前预览区 */
+function restoreHistory(idx) {
+  const h = wsHistory[idx];
+  if (!h) return;
+  wsItemId = h.item.id;
+  wsStyleId = h.style.id;
+  wsPoem = h.poem;
+  wsAiImage = h.image;
+  wsGenerated = true;
+  renderGallery();
+  renderStyles();
+  renderToolChips();
+  finishGenerate();
+  SoundFX.click();
+  toast(`已恢复「${h.title || h.item.name}」`);
+}
+
+/* HTML 转义：防止用户输入 XSS */
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+/* ---------- 生成完成：渲染当前预览 + 工具栏 ---------- */
+function finishGenerate() {
+  wsGenerated = true;
   document.getElementById('previewModeBar').classList.remove('hidden');
   renderResSelect();
   renderTplBar();
   document.getElementById('previewTplBar').classList.remove('hidden');
   renderPreview();
-
-  // AI 小诗（带打字机效果）
-  const poemBox = document.getElementById('poemBox');
-  poemBox.classList.remove('hidden');
-  document.getElementById('poemStyleName').textContent = `AI 为「${item.name}」赋诗 · ${style.name}`;
-  typePoem(wsPoem);
-  SoundFX.generate();
-  toast('AI 文创生成完成，可切换预览模式或下载保存');
-}
-
-function typePoem(text) {
-  const el = document.getElementById('poemText');
-  el.innerHTML = '';
-  const lines = text.split('\n');
-  let li = 0, ci = 0;
-  const t = setInterval(() => {
-    if (li >= lines.length) { clearInterval(t); return; }
-    const line = lines[li];
-    el.innerHTML = lines.slice(0, li).join('<br>') + (li ? '<br>' : '') + line.slice(0, ci + 1) + '<span class="cursor">▏</span>';
-    ci++;
-    if (ci >= line.length) { li++; ci = 0; }
-    if (li >= lines.length) {
-      clearInterval(t);
-      el.innerHTML = lines.join('<br>');
-    }
-  }, 70);
 }
 
 /* ---------- 预览：明信片 / 茶叶礼盒 ---------- */
@@ -902,3 +1063,20 @@ function downloadCompare() {
 function closeCompare() {
   document.getElementById('compareModal').classList.add('hidden');
 }
+
+/* ---------- 初始化：绑定聊天输入框回车发送（Shift+回车换行） ---------- */
+(function bindChatInput() {
+  const input = document.getElementById('chatInput');
+  if (!input) return;
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendChatMessage();
+    }
+  });
+  // 自动调整高度
+  input.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+  });
+})();

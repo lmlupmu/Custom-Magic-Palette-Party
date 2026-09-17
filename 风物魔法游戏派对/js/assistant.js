@@ -383,28 +383,31 @@ const Assistant = (() => {
       if (typingEl) typingEl.remove();
 
       if (data.tool_calls && data.tool_calls.length > 0) {
-        const toolCall = data.tool_calls[0];
-        const result = executeToolCall(toolCall.name, toolCall.arguments);
+        // 把 assistant 的回复（含 tool_calls）push 一次
         chatHistory.push({
           role: 'assistant',
           content: data.reply || '',
           tool_calls: data.tool_calls
         });
-        chatHistory.push({
-          role: 'tool',
-          name: toolCall.name,
-          content: JSON.stringify(result)
-        });
+        // 多步工具调用：按顺序串行执行所有 tool_calls（selectItem → selectStyle → sendChatMessage 等）
+        for (const toolCall of data.tool_calls) {
+          const result = executeToolCall(toolCall.name, toolCall.arguments);
+          chatHistory.push({
+            role: 'tool',
+            name: toolCall.name,
+            content: JSON.stringify(result)
+          });
 
-        const actionText = data.reply || `好的，我来帮你${toolNameToText(toolCall.name)}～`;
-        addMessage('assistant', actionText);
-        speak(actionText);
+          const actionText = `好的，我来帮你${toolNameToText(toolCall.name)}～`;
+          addMessage('assistant', actionText);
+          speak(actionText);
 
-        if (result && result.message) {
-          setTimeout(() => {
+          if (result && result.message) {
+            // 多步时让前一步可见后再说下一步，避免消息堆叠
+            await new Promise(r => setTimeout(r, 500));
             addMessage('assistant', result.message);
             speak(result.message);
-          }, 800);
+          }
         }
       } else {
         const reply = data.reply || '抱歉，我没听清，能再说一次吗？';
@@ -428,7 +431,7 @@ const Assistant = (() => {
       goPage: '跳转页面',
       selectItem: '选择风物',
       selectStyle: '选择风格',
-      generateArtwork: '生成文创',
+      sendChatMessage: '启动智能体创作',
       downloadArtwork: '下载作品',
       setPreviewMode: '切换预览',
       enableDemoMode: '开启演示模式',
@@ -459,17 +462,13 @@ const Assistant = (() => {
         break;
       case 'selectStyle':
         if (args.styleId) {
-          wsStyleId = args.styleId;
-          wsGenerated = false;
-          wsAiImage = null;
-          renderStyles();
-          renderTplBar();
+          selectStyle(args.styleId);
           return { success: true, message: `已切换到${styleName(args.styleId)}风格` };
         }
         break;
-      case 'generateArtwork':
-        generateArtwork();
-        return { success: true, message: 'AI 正在为你创作，请稍等片刻～' };
+      case 'sendChatMessage':
+        sendChatMessage();
+        return { success: true, message: '智能体正在协作创作（诗人→画师→评论家），请稍等片刻～' };
       case 'downloadArtwork':
         downloadArtwork();
         return { success: true, message: '正在下载文创成品' };

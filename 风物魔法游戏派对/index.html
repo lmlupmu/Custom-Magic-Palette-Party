@@ -93,54 +93,65 @@
     </div>
   </section>
 
-  <!-- ======== AI 调色工坊 ======== -->
+  <!-- ======== AI 调色工坊（智能体协作对话版） ======== -->
   <section class="page" id="page-workshop">
     <div class="page-head">
       <h2>AI 调色文创工坊</h2>
-      <p class="page-desc">选线稿 → 挑色调 → 点【AI魔法生成】→ 预览明信片 / 茶叶礼盒 → 下载文创成品。</p>
+      <p class="page-desc">选风物 · 挑色调 · 说想法 → 智能体协作（诗人 / 画师 / 评论家）分步流式生成 → 聊天卡片展示 → 一键下载。</p>
     </div>
 
     <div class="workshop">
-      <!-- 左：线稿图库 -->
+      <!-- 左：风物线稿图库（工具面板：单击填参 / 双击直接生成） -->
       <aside class="ws-gallery">
         <h3 class="ws-title">① 风物线稿图库</h3>
         <div id="galleryGrid" class="gallery-grid"></div>
         <input type="file" id="customUpload" accept="image/*" class="hidden" onchange="onCustomUpload(this)">
       </aside>
 
-      <!-- 中：预览区 -->
-      <div class="ws-preview">
-        <div id="previewStage" class="preview-stage">
-          <div class="preview-empty" id="previewEmpty">
-            <div class="preview-empty-art" id="previewLineArt"></div>
-            <p id="previewHintText">选择左侧线稿，点击「AI魔法生成」</p>
-          </div>
-          <div id="aiLoading" class="ai-loading hidden">
-            <div class="ai-orb"></div>
-            <p id="aiLoadingText">AI 正在理解线稿…</p>
-          </div>
-          <div id="previewResult" class="preview-result hidden"></div>
-        </div>
-
+      <!-- 中：对话流 + 输入区 -->
+      <div class="ws-chat">
+        <!-- 当前作品工具栏（生成后显示：模式切换 / 模板 / 分辨率 / 对比 / 下载） -->
         <div id="previewModeBar" class="preview-mode-bar hidden">
-          <button class="mode-btn active" data-mode="postcard" onclick="setPreviewMode('postcard')">明信片预览</button>
-          <button class="mode-btn" data-mode="teabox" onclick="setPreviewMode('teabox')">茶叶礼盒预览</button>
+          <button class="mode-btn active" data-mode="postcard" onclick="setPreviewMode('postcard')">明信片</button>
+          <button class="mode-btn" data-mode="teabox" onclick="setPreviewMode('teabox')">茶叶礼盒</button>
           <button class="btn-ghost" onclick="openStyleCompare()">四风格对比</button>
           <div id="resChips" class="res-chips" role="group" aria-label="下载 PNG 分辨率"></div>
           <button class="btn-primary" onclick="downloadArtwork()">下载文创成品</button>
         </div>
         <div id="previewTplBar" class="preview-tpl-bar hidden"></div>
+
+        <!-- 聊天流：分步智能体协作过程 + 作品卡片（图+诗+评论） -->
+        <div id="chatStream" class="chat-stream">
+          <div class="chat-msg chat-welcome">
+            <div class="chat-avatar">小风</div>
+            <div class="chat-bubble">
+              <p>欢迎来到 AI 调色文创工坊，我是国风少女智能体小风～</p>
+              <p>左侧选<strong>风物</strong>、右侧选<strong>色调</strong>：单击=填入输入框，双击=直接生成；中间输入框可以打字告诉我你的想法。</p>
+              <p>我会协调 <span class="agent-tag poet">诗人</span> <span class="agent-tag painter">画师</span> <span class="agent-tag critic">评论家</span> 三个 AI 智能体协作，分步流式展示创作过程。</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 预览成果区（嵌入聊天流末尾，含图+诗+评论+下载） -->
+        <div id="previewResult" class="preview-result hidden"></div>
+
+        <!-- 输入区：工具快捷条 + 输入框 + 发送键 -->
+        <div class="chat-input-area">
+          <div id="toolChips" class="tool-chips"></div>
+          <div class="chat-input-row">
+            <textarea id="chatInput" class="chat-input" rows="2" placeholder="说说你的想法，或双击左侧风物、右侧风格一键生成…"></textarea>
+            <button id="chatSend" class="chat-send" onclick="sendChatMessage()">发送</button>
+          </div>
+        </div>
       </div>
 
-      <!-- 右：控制区 -->
+      <!-- 右：色调风格工具面板 + 历史 -->
       <aside class="ws-controls">
         <h3 class="ws-title">② 艺术色调风格</h3>
         <div id="styleList" class="style-list"></div>
-        <h3 class="ws-title">③ AI 创作</h3>
-        <button class="btn-magic" id="btnMagic" onclick="generateArtwork()">AI 魔法生成</button>
-        <div id="poemBox" class="poem-box hidden">
-          <div class="poem-head"><span class="poem-seal">AI诗人</span><span id="poemStyleName"></span></div>
-          <p id="poemText"></p>
+        <h3 class="ws-title">③ 历史作品</h3>
+        <div id="historyList" class="history-list">
+          <p class="history-empty">还没有作品，开始创作吧～</p>
         </div>
       </aside>
     </div>
