@@ -5,7 +5,8 @@
  * ===================================================== */
 
 let wsItemId = null;        // 选中的风物（内置id 或 custom:xxx）
-let wsStyleId = 'spring';   // 选中的色调
+let wsStyleId = 'spring';   // 选中的预设色调（spring/autumn/guochao/ink）
+let wsCurrentStyle = null;  // 当前生效的风格对象（预设或自定义，含 pal）
 let wsPoem = '';            // AI 生成的小诗
 let wsGenerated = false;    // 是否已生成
 let wsAiImage = null;       // AI 风格化后的图片（dataURL），null 时回退 CSS 滤镜
@@ -202,7 +203,7 @@ function renderToolChips() {
   const bar = document.getElementById('toolChips');
   if (!bar) return;
   const item = getWsItem();
-  const style = getStyle(wsStyleId);
+  const style = wsCurrentStyle || getStyle(wsStyleId);
   bar.innerHTML = '';
   if (item) {
     const chip = document.createElement('span');
@@ -228,6 +229,7 @@ function renderToolChips() {
 /* ---------- 色调风格：单击切换 / 双击直接生成 ---------- */
 function selectStyle(id) {
   wsStyleId = id;
+  wsCurrentStyle = getStyle(id);  // 同步当前生效风格（预设）
   wsGenerated = false;
   wsAiImage = null;
   SoundFX.click();
@@ -388,15 +390,30 @@ async function sendChatMessage() {
 
     if (!doneEvent) throw new Error('未收到完成事件');
 
-    /* Planner 可能切换了风格：用 done 事件返回的 finalStyle 更新 style 变量 */
+    /* Planner 可能切换了风格或构造了自定义风格：用 done 事件的 style 更新 */
     let finalStyle = style;
-    if (doneEvent.style && doneEvent.style.id && doneEvent.style.id !== style.id) {
-      const switched = getStyle(doneEvent.style.id);
-      if (switched) {
-        finalStyle = switched;
-        wsStyleId = switched.id;   // 同步全局状态，方便后续生成沿用新风格
-        renderStyles();             // 右栏风格列表同步高亮新风格
-        renderToolChips();          // 工具 chip 同步更新
+    if (doneEvent.style && doneEvent.style.id) {
+      const evtStyle = doneEvent.style;
+      const localStyle = getStyle(evtStyle.id);
+      if (localStyle && evtStyle.id !== style.id) {
+        /* 预设风格切换（spring/autumn/guochao/ink 之间） */
+        finalStyle = localStyle;
+        wsStyleId = localStyle.id;
+        wsCurrentStyle = localStyle;
+        renderStyles();
+        renderToolChips();
+      } else if (!localStyle && evtStyle.pal) {
+        /* 自定义风格（id='custom' 或不在 STYLES 里）：用 doneEvent.style.pal 构造临时对象 */
+        finalStyle = {
+          id: evtStyle.id,
+          name: evtStyle.name || '自定义风格',
+          desc: evtStyle.desc || '',
+          pal: evtStyle.pal,
+          custom: true
+        };
+        wsCurrentStyle = finalStyle;   // 工具 chip 显示新风格名
+        renderToolChips();
+        /* 不调 renderStyles()：自定义风格不在 STYLES 列表里，无法高亮 */
       }
     }
 

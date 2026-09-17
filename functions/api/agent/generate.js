@@ -13,11 +13,33 @@ const STYLE_PROMPTS = {
 };
 
 const STYLE_BY_ID = {
-  spring:  { id: 'spring',  name: '春日青绿', desc: '雨前初绽 · 春和盎然' },
-  autumn:  { id: 'autumn',  name: '秋意赭黄', desc: '层林尽染 · 丰收暖阳' },
-  guochao: { id: 'guochao', name: '国潮艳彩', desc: '浓墨重彩 · 年轻国潮' },
-  ink:     { id: 'ink',     name: '淡雅水墨', desc: '留白写意 · 东方禅意' }
+  spring:  { id: 'spring',  name: '春日青绿', desc: '雨前初绽 · 春和盎然', pal: { main: '#5FA96F', sub: '#8FCB9B', deep: '#3E7D54', accent: '#F2C94C', bg: '#EAF6EC', paper: '#FDFBF3' } },
+  autumn:  { id: 'autumn',  name: '秋意赭黄', desc: '层林尽染 · 丰收暖阳', pal: { main: '#C9803B', sub: '#E0A75E', deep: '#8C4F21', accent: '#A63D2A', bg: '#F7ECD8', paper: '#FBF4E4' } },
+  guochao: { id: 'guochao', name: '国潮艳彩', desc: '浓墨重彩 · 年轻国潮', pal: { main: '#E63946', sub: '#F4A261', deep: '#1D3557', accent: '#2A9D8F', bg: '#FFF3E2', paper: '#FFFBF2' } },
+  ink:     { id: 'ink',     name: '淡雅水墨', desc: '留白写意 · 东方禅意', pal: { main: '#6B7B75', sub: '#9AA8A2', deep: '#3E4E48', accent: '#A63D2A', bg: '#F2F0EA', paper: '#F8F6F0' } }
 };
+
+/* 构造最终风格对象：预设风格直接复用，自定义风格用 Planner 输出的色板+提示词 */
+function buildFinalStyle(plan, fallbackStyle) {
+  if (plan.finalStyleId && plan.finalStyleId !== 'custom' && STYLE_BY_ID[plan.finalStyleId]) {
+    return STYLE_BY_ID[plan.finalStyleId];
+  }
+  const p = plan.customPalette || {};
+  return {
+    id: 'custom',
+    name: plan.customStyleName || '自定义风格',
+    desc: plan.customStyleDesc || '',
+    pal: {
+      main:   /^#[0-9a-fA-F]{6}$/.test(p.main)   ? p.main   : '#888888',
+      sub:    /^#[0-9a-fA-F]{6}$/.test(p.sub)    ? p.sub    : '#aaaaaa',
+      deep:   /^#[0-9a-fA-F]{6}$/.test(p.deep)   ? p.deep   : '#444444',
+      accent: /^#[0-9a-fA-F]{6}$/.test(p.accent) ? p.accent : '#fbbf24',
+      bg:     /^#[0-9a-fA-F]{6}$/.test(p.bg)     ? p.bg     : '#f5f5f5',
+      paper:  /^#[0-9a-fA-F]{6}$/.test(p.paper)  ? p.paper  : '#fafafa'
+    },
+    sdxlPrompt: plan.sdxlPrompt || `art style, ${plan.customStyleName || 'custom aesthetic'}`
+  };
+}
 
 const ITEMS_INFO = {
   tea:        { name: '茶叶',   alias: '信阳毛尖' },
@@ -55,9 +77,12 @@ async function runPlanner(env, item, style, userPrompt) {
   /* 无用户输入：直接返回默认规划，不浪费一次 AI 调用 */
   if (!userPrompt || userPrompt.trim().length < 2) {
     return {
-      finalStyle: style,
-      customPrompt: '',
-      intent: `按「${style.name}」风格创作${item.name}文创`
+      plan: {
+        finalStyleId: style.id,
+        customPrompt: '',
+        intent: `按「${style.name}」风格创作${item.name}文创`
+      },
+      finalStyle: style
     };
   }
 
@@ -68,31 +93,32 @@ async function runPlanner(env, item, style, userPrompt) {
 
 当前风物：${item.name}${item.alias ? `（${item.alias}）` : ''}
 当前风格：${style.name} — ${style.desc}
-可选风格（按 id 选择）：
+
+可选风格（按 finalStyleId 选择）：
 ${styleList}
+- custom：用户描述的其他风格（不属于以上 4 种预设时选这个，需自定义色板和提示词）
 
 用户要求：${userPrompt}
 
 请判断：
-1. 用户是否想换风格？关键词映射：
-   - 黑白/水墨/写意/留白 → ink（淡雅水墨）
-   - 春/青绿/嫩芽/雨前 → spring（春日青绿）
-   - 秋/金黄/赅黄/丰收/暖阳 → autumn（秋意赅黄）
-   - 国潮/艳/彩/年轻 → guochao（国潮艳彩）
-   - 如未提风格，沿用当前 finalStyleId
-2. customPrompt：提炼用户想法为 50 字内创作约束（保留用户原意，可补风格特征）
-3. intent：一句话说明规划结论
+1. 用户想要哪种风格？
+   - 如果对应 4 种预设之一（关键词：黑白/水墨/写意→ink；春/青绿→spring；秋/金黄→autumn；国潮/艳彩→guochao），finalStyleId 设为对应 id
+   - 如果是其他风格（如赛博朋克/敦煌壁画/浮世绘/印象派/极简/暖橙/冷蓝/复古/动漫等），finalStyleId 设为 "custom"，并填写 customStyleName/customStyleDesc/customPalette/sdxlPrompt
+2. customPalette：4 个十六进制颜色（main 主色，sub 辅色，deep 深色，accent 点缀色，bg 背景，paper 纸色），契合风格特征
+3. sdxlPrompt：英文 SDXL 提示词（30-60 词），描述视觉特征（如 "cyberpunk neon, futuristic, dark mood, blue purple palette, holographic"）
+4. customPrompt：50 字内中文创作约束（融合用户想法+风格特征）
+5. intent：一句话说明规划结论
 
 严格输出 JSON（不要 markdown 代码块，不要解释）：
-{"finalStyleId":"<spring|autumn|guochao|ink>","customPrompt":"<50字内创作约束>","intent":"<一句话规划结论>"}`;
+{"finalStyleId":"<spring|autumn|guochao|ink|custom>","customStyleName":"<自定义风格名，预设时为空>","customStyleDesc":"<20字内描述，预设时为空>","customPalette":{"main":"#hex","sub":"#hex","deep":"#hex","accent":"#hex","bg":"#hex","paper":"#hex"},"sdxlPrompt":"<英文SDXL提示词>","customPrompt":"<50字内创作约束>","intent":"<一句话规划结论>"}`;
 
   const response = await env.AI.run('@cf/qwen/qwen3-30b-a3b-fp8', {
     messages: [
-      { role: 'system', content: '你是国风文创规划智能体，擅长解析用户意图并输出 JSON 指令。只输出 JSON，不加任何解释。' },
+      { role: 'system', content: '你是国风文创规划智能体，擅长解析用户意图并输出 JSON 指令。只输出 JSON，不加任何解释或 markdown 代码块。' },
       { role: 'user', content: prompt }
     ],
-    temperature: 0.3,
-    max_tokens: 200
+    temperature: 0.4,
+    max_tokens: 400
   });
 
   let text = '';
@@ -103,8 +129,9 @@ ${styleList}
   if (match) {
     try {
       const parsed = JSON.parse(match[0]);
-      const finalStyle = STYLE_BY_ID[parsed.finalStyleId] || style;
+      const finalStyle = buildFinalStyle(parsed, style);
       return {
+        plan: parsed,
         finalStyle,
         customPrompt: (parsed.customPrompt || userPrompt).slice(0, 100),
         intent: parsed.intent || `按「${finalStyle.name}」风格创作`
@@ -113,6 +140,7 @@ ${styleList}
   }
   /* 解析失败：返回默认（保留原 style 和 userPrompt） */
   return {
+    plan: { finalStyleId: style.id, customPrompt: userPrompt, intent: `按「${style.name}」风格创作` },
     finalStyle: style,
     customPrompt: userPrompt,
     intent: `按「${style.name}」风格创作`
@@ -167,7 +195,8 @@ ${item.custom ? '这是用户自定义上传的风物，请将风物名融入诗
 async function runPainter(env, item, style) {
   if (!item.custom || !item.img) return null;
   const base64 = item.img.replace(/^data:image\/\w+;base64,/, '');
-  const stylePrompt = STYLE_PROMPTS[style.name] || `Chinese art style, ${style.name}, ${style.desc}`;
+  /* 优先用 finalStyle.sdxlPrompt（自定义风格），fallback 到 STYLE_PROMPTS[name]（预设风格） */
+  const stylePrompt = style.sdxlPrompt || STYLE_PROMPTS[style.name] || `art style, ${style.name}, ${style.desc}`;
 
   const response = await env.AI.run('@cf/stabilityai/stable-diffusion-xl-base-1.0', {
     prompt: stylePrompt,
@@ -267,17 +296,18 @@ export async function onRequestPost({ request, env }) {
       async start(controller) {
         const send = (obj) => controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'));
 
-        /* Step 1: Planner 规划智能体（真正调 LLM 解析用户意图，可能切换风格） */
+        /* Step 1: Planner 规划智能体（真正调 LLM 解析用户意图，可能切换风格或构造自定义风格） */
         send({ agent: 'Planner', status: 'running', message: '正在理解你的创作意图…' });
-        const plan = await runPlanner(env, item, style, userPrompt).catch(() => ({
+        const planResult = await runPlanner(env, item, style, userPrompt).catch(() => ({
+          plan: { finalStyleId: style.id, customPrompt: userPrompt, intent: `按「${style.name}」风格创作` },
           finalStyle: style,
           customPrompt: userPrompt,
           intent: `按「${style.name}」风格创作`
         }));
-        const finalStyle = plan.finalStyle;
-        const finalPrompt = plan.customPrompt;
+        const finalStyle = planResult.finalStyle;
+        const finalPrompt = planResult.customPrompt;
         const styleChanged = finalStyle.id !== style.id;
-        const planText = `风物：${item.name}${item.alias ? ' · ' + item.alias : ''}，风格：${finalStyle.name}${styleChanged ? `（由「${style.name}」切换）` : ''}${finalPrompt ? '，创作约束：「' + finalPrompt + '」' : ''} · ${plan.intent}`;
+        const planText = `风物：${item.name}${item.alias ? ' · ' + item.alias : ''}，风格：${finalStyle.name}${styleChanged ? `（由「${style.name}」切换）` : ''}${finalStyle.id === 'custom' && finalStyle.desc ? ' · ' + finalStyle.desc : ''}${finalPrompt ? '，创作约束：「' + finalPrompt + '」' : ''} · ${planResult.intent}`;
         send({ agent: 'Planner', status: 'done', message: planText });
 
         /* Step 2: Poet + Painter 并行（使用 Planner 解析后的 finalStyle 和 finalPrompt） */
@@ -303,16 +333,22 @@ export async function onRequestPost({ request, env }) {
         }));
         send({ agent: 'Critic', status: 'done', result: critique });
 
-        /* Done：汇总结果（用 finalStyle 让前端作品卡显示正确风格） */
+        /* Done：汇总结果（带回完整 finalStyle 含 pal，让前端作品卡按自定义色板着色） */
         send({
           done: true,
           poem: poem || '',
           image: image || '',
           title: critique.title || `${item.name}·${finalStyle.name}`,
           critique: critique.critique || '',
-          intent: critique.intent || plan.intent,
+          intent: critique.intent || planResult.intent,
           item: { id: item.id, name: item.name, alias: item.alias || '', custom: !!item.custom },
-          style: { id: finalStyle.id, name: finalStyle.name, desc: finalStyle.desc }
+          style: {
+            id: finalStyle.id,
+            name: finalStyle.name,
+            desc: finalStyle.desc,
+            pal: finalStyle.pal,
+            sdxlPrompt: finalStyle.sdxlPrompt || null
+          }
         });
 
         controller.close();
