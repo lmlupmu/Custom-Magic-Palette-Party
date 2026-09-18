@@ -99,8 +99,13 @@ const TOOLS = [
   },
   {
     name: 'sendChatMessage',
-    description: '启动智能体协作生成文创作品（诗人→画师→评论家），等价于点击工坊发送键',
-    parameters: { type: 'object', properties: {} }
+    description: '启动智能体协作生成文创作品（诗人→画师→评论家），等价于点击工坊发送键。可传入用户的风格/创作想法作为 prompt',
+    parameters: {
+      type: 'object',
+      properties: {
+        prompt: { type: 'string', description: '用户的创作想法或风格描述，如"换成水墨风""来点赛博朋克"' }
+      }
+    }
   },
   {
     name: 'downloadArtwork',

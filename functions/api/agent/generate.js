@@ -288,7 +288,11 @@ export async function onRequestPost({ request, env }) {
       const base = ITEMS_INFO[itemId] || ITEMS_INFO.tea;
       item = { ...base, custom: false };
     }
-    const style = STYLE_BY_ID[styleId] || STYLE_BY_ID.spring;
+    /* 风格：前端未选预设时 styleId=null，用中性占位符让 Planner 根据用户描述自由决策 */
+    const style = STYLE_BY_ID[styleId] || {
+      id: 'neutral', name: '未选择', desc: '用户未指定预设风格，由 AI 根据描述决定',
+      pal: { main: '#888888', sub: '#aaaaaa', deep: '#444444', accent: '#fbbf24', bg: '#f5f5f5', paper: '#fafafa' }
+    };
 
     /* NDJSON 流式响应：每行一个事件 JSON，前端逐行解析 */
     const encoder = new TextEncoder();

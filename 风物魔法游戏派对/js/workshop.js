@@ -5,7 +5,7 @@
  * ===================================================== */
 
 let wsItemId = null;        // 选中的风物（内置id 或 custom:xxx）
-let wsStyleId = 'spring';   // 选中的预设色调（spring/autumn/guochao/ink）
+let wsStyleId = null;       // 选中的预设色调（spring/autumn/guochao/ink），null=让AI根据描述决定
 let wsCurrentStyle = null;  // 当前生效的风格对象（预设或自定义，含 pal）
 let wsPoem = '';            // AI 生成的小诗
 let wsGenerated = false;    // 是否已生成
@@ -198,12 +198,17 @@ function selectItem(id) {
   SoundFX.click();
 }
 
+/* 统一取当前生效的风格（预设 或 Planner 解析出的自定义风格） */
+function getCurrentStyle() {
+  return wsCurrentStyle || (wsStyleId ? getStyle(wsStyleId) : null);
+}
+
 /* ---------- 工具 chip 条：当前选中的风物 + 风格（输入框上方） ---------- */
 function renderToolChips() {
   const bar = document.getElementById('toolChips');
   if (!bar) return;
   const item = getWsItem();
-  const style = wsCurrentStyle || getStyle(wsStyleId);
+  const style = getCurrentStyle();
   bar.innerHTML = '';
   if (item) {
     const chip = document.createElement('span');
@@ -220,8 +225,21 @@ function renderToolChips() {
   }
   if (style) {
     const chip = document.createElement('span');
-    chip.className = 'tool-chip style';
+    chip.className = 'tool-chip style' + (style.custom ? ' custom' : '');
     chip.innerHTML = `<span class="tool-chip-label">风格</span><span class="tool-chip-value">${escapeHtml(style.name)}</span>`;
+    chip.title = style.custom ? 'AI 根据你的描述生成的自定义风格，点击清除' : '点击清除风格选择，让 AI 根据描述决定';
+    chip.onclick = () => {
+      wsStyleId = null;
+      wsCurrentStyle = null;
+      wsGenerated = false;
+      renderStyles();
+      renderToolChips();
+    };
+    bar.appendChild(chip);
+  } else {
+    const chip = document.createElement('span');
+    chip.className = 'tool-chip hint';
+    chip.innerHTML = `<span class="tool-chip-label">风格</span><span class="tool-chip-value">未选择（在下方描述你想要的风格，AI 自动配色）</span>`;
     bar.appendChild(chip);
   }
 }
@@ -229,7 +247,7 @@ function renderToolChips() {
 /* ---------- 色调风格：单击切换 / 双击直接生成 ---------- */
 function selectStyle(id) {
   wsStyleId = id;
-  wsCurrentStyle = getStyle(id);  // 同步当前生效风格（预设）
+  wsCurrentStyle = getStyle(id);  // 同步当前生效风格（预设），清除可能的自定义风格
   wsGenerated = false;
   wsAiImage = null;
   SoundFX.click();
@@ -246,6 +264,13 @@ function selectStyle(id) {
 function renderStyles() {
   const list = document.getElementById('styleList');
   list.innerHTML = '';
+  /* 未选风格时顶部提示 */
+  if (!wsStyleId && !wsCurrentStyle) {
+    const hint = document.createElement('div');
+    hint.className = 'style-hint';
+    hint.innerHTML = '💡 未选色调？在下方输入框描述你想要的风格，<strong>AI 会即时为你配色</strong>。也可直接点击下方预设风格。';
+    list.appendChild(hint);
+  }
   STYLES.forEach(s => {
     const el = document.createElement('div');
     el.className = 'style-card' + (wsStyleId === s.id ? ' active' : '');
@@ -310,14 +335,15 @@ function customImgTag(item, pal, fillClass) {
   if (wsAiImage) {
     return `<div class="pv-custom${cls}" style="background:${pal.bg}"><img src="${wsAiImage}" alt="${item.name}"></div>`;
   }
-  const filter = CUSTOM_FILTERS[wsStyleId] || 'none';
+  const filter = (wsStyleId && CUSTOM_FILTERS[wsStyleId]) || 'none';
   return `<div class="pv-custom${cls}" style="background:${pal.bg}"><img src="${item.img}" style="filter:${filter}" alt="${item.name}"></div>`;
 }
 
 function fallbackPoem(item, styleId) {
-  if (item.custom) return generateCustomPoem(item.name, styleId);
+  const sid = styleId || 'spring';
+  if (item.custom) return generateCustomPoem(item.name, sid);
   const bank = POEMS[wsItemId];
-  return bank ? bank[styleId] : POEMS.tea.spring;
+  return bank ? (bank[sid] || bank.spring) : POEMS.tea.spring;
 }
 
 /* ---------- 智能体协作：发送想法 → 流式生成 ---------- */
@@ -325,21 +351,30 @@ async function sendChatMessage() {
   if (wsChatBusy) { toast('智能体正在创作中，请稍候…'); return; }
   const item = getWsItem();
   if (!item) { toast('请先在左侧选择一张已解锁的风物线稿'); return; }
-  const style = getStyle(wsStyleId);
-  if (!style) { toast('请选择一种色调风格'); return; }
 
   const input = document.getElementById('chatInput');
   const userPrompt = (input.value || '').trim();
   input.value = '';
   input.style.height = 'auto';
 
-  // 把用户消息追加到聊天流（空提示给默认文案）
-  appendUserMessage(userPrompt || `（默认创作：${item.name} · ${style.name}）`);
+  /* 风格判断：用户输入了文字 → 让 Planner 决定风格（可自定义或匹配预设）；
+     未输入文字 → 必须已选预设，否则提示用户二选一 */
+  const presetStyle = wsStyleId ? getStyle(wsStyleId) : null;
+  if (!userPrompt && !presetStyle) {
+    toast('请选择一种色调风格，或在输入框描述你想要的风格');
+    return;
+  }
+  /* 用作默认风格传给后端（Planner 可能覆盖）：优先预设，其次自定义，否则 null */
+  const baseStyle = presetStyle || wsCurrentStyle || null;
 
-  // 请求体：自定义风物附带图片和名字
+  // 把用户消息追加到聊天流
+  const styleName = baseStyle ? baseStyle.name : 'AI 自动配色';
+  appendUserMessage(userPrompt || `（默认创作：${item.name} · ${styleName}）`);
+
+  // 请求体：自定义风物附带图片和名字；styleId 可为 null（让 Planner 决定）
   const body = {
     itemId: item.id,
-    styleId: wsStyleId,
+    styleId: wsStyleId || null,
     userPrompt,
     customImage: item.custom ? item.img : undefined,
     customName: item.custom ? item.name : undefined
@@ -392,11 +427,11 @@ async function sendChatMessage() {
     if (!doneEvent) throw new Error('未收到完成事件');
 
     /* Planner 可能切换了风格或构造了自定义风格：用 done 事件的 style 更新 */
-    let finalStyle = style;
+    let finalStyle = baseStyle;
     if (doneEvent.style && doneEvent.style.id) {
       const evtStyle = doneEvent.style;
       const localStyle = getStyle(evtStyle.id);
-      if (localStyle && evtStyle.id !== style.id) {
+      if (localStyle && (!baseStyle || evtStyle.id !== baseStyle.id)) {
         /* 预设风格切换（spring/autumn/guochao/ink 之间） */
         finalStyle = localStyle;
         wsStyleId = localStyle.id;
@@ -412,9 +447,15 @@ async function sendChatMessage() {
           pal: evtStyle.pal,
           custom: true
         };
-        wsCurrentStyle = finalStyle;   // 工具 chip 显示新风格名
+        wsStyleId = null;             // 自定义风格不对应任何预设
+        wsCurrentStyle = finalStyle;  // 工具 chip 显示新风格名
+        renderStyles();               // 预设列表全部取消高亮
         renderToolChips();
-        /* 不调 renderStyles()：自定义风格不在 STYLES 列表里，无法高亮 */
+      } else if (localStyle) {
+        /* Planner 确认沿用当前预设 */
+        finalStyle = localStyle;
+        wsStyleId = localStyle.id;
+        wsCurrentStyle = localStyle;
       }
     }
 
@@ -436,13 +477,16 @@ async function sendChatMessage() {
     toast('智能体协作完成，可下载或继续对话修改');
   } catch (e) {
     console.error('agent generate failed', e);
-    // 回退到本地诗库 + 滤镜模拟
+    // 回退到本地诗库 + 滤镜模拟（无预设风格时用 spring 兜底）
+    const fbStyle = baseStyle || getStyle('spring');
+    wsStyleId = wsStyleId || 'spring';
+    wsCurrentStyle = fbStyle;
     wsPoem = fallbackPoem(item, wsStyleId);
     wsAiImage = null;
     wsGenerated = true;
     finishGenerate();
-    appendWorkCard(item, style, wsPoem, null,
-      `${item.name}·${style.name}`,
+    appendWorkCard(item, fbStyle, wsPoem, null,
+      `${item.name}·${fbStyle.name}`,
       '智能体服务暂不可用，已使用本地诗库 + 滤镜模拟生成。',
       'fallback 本地生成');
     toast('智能体服务暂不可用，已使用本地生成');
@@ -564,7 +608,15 @@ function restoreHistory(idx) {
   const h = wsHistory[idx];
   if (!h) return;
   wsItemId = h.item.id;
-  wsStyleId = h.style.id;
+  /* 历史可能是预设风格或自定义风格（含 pal） */
+  const localStyle = getStyle(h.style.id);
+  if (localStyle) {
+    wsStyleId = h.style.id;
+    wsCurrentStyle = localStyle;
+  } else {
+    wsStyleId = null;
+    wsCurrentStyle = { id: h.style.id, name: h.style.name, pal: h.style.pal, custom: true };
+  }
   wsPoem = h.poem;
   wsAiImage = h.image;
   wsGenerated = true;
@@ -606,7 +658,7 @@ function setPreviewMode(mode) {
 function renderResSelect() {
   const bar = document.getElementById('resChips');
   if (!bar) return;
-  const accent = getStyle(wsStyleId).pal.accent;
+  const accent = getCurrentStyle().pal.accent;
   bar.innerHTML = '';
   WS_RES[wsMode].forEach((r, i) => {
     const on = i === wsResIdx;
@@ -635,7 +687,7 @@ function setResolution(i) {
 function renderTplBar() {
   const bar = document.getElementById('previewTplBar');
   if (!bar) return;
-  const accent = getStyle(wsStyleId).pal.accent;
+  const accent = getCurrentStyle().pal.accent;
   bar.innerHTML = '';
   WS_TPLS[wsMode].forEach(t => {
     const b = document.createElement('button');
@@ -679,7 +731,8 @@ function previewArtHtml(item, style, size) {
 function renderPreview() {
   if (!wsGenerated) return;
   const item = getWsItem();
-  const style = getStyle(wsStyleId);
+  const style = getCurrentStyle();
+  if (!style) return;
   const pal = style.pal;
   const art = previewArtHtml(item, style, 420);
   const stage = document.getElementById('previewResult');
@@ -797,16 +850,17 @@ function loadImg(src) {
   });
 }
 
-/* 取某项的 canvas 用图（内置=按指定风格上色的SVG图，自定义=带该风格滤镜的图片）；styleId 缺省取当前选中色调 */
+/* 取某项的 canvas 用图（内置=按指定风格上色的SVG图，自定义=带该风格滤镜的图片）；styleId 缺省取当前生效风格 */
 async function getArtImage(item, size, styleId) {
-  const sid = styleId || wsStyleId;
+  const style = styleId ? getStyle(styleId) : getCurrentStyle();
+  if (!style) return { img: null, filter: 'none', custom: false };
   if (item.custom) {
     if (wsAiImage && (!styleId || styleId === wsStyleId)) {
       return { img: await loadImg(wsAiImage), filter: 'none', custom: true };
     }
-    return { img: await loadImg(item.img), filter: CUSTOM_FILTERS[sid] || 'none', custom: true };
+    return { img: await loadImg(item.img), filter: (styleId && CUSTOM_FILTERS[styleId]) || 'none', custom: true };
   }
-  return { img: await loadSvgImg(item.build(getStyle(sid).pal, true), size, size), filter: 'none', custom: false };
+  return { img: await loadSvgImg(item.build(style.pal, true), size, size), filter: 'none', custom: false };
 }
 
 /* cover 方式绘制图片（带滤镜）到指定方形区域 */
@@ -840,15 +894,16 @@ function rr(ctx, x, y, w, h, r) {
 async function getArtImageSlice(item, w, h) {
   if (item.custom) {
     if (wsAiImage) return { img: await loadImg(wsAiImage), filter: 'none', custom: true };
-    return { img: await loadImg(item.img), filter: CUSTOM_FILTERS[wsStyleId] || 'none', custom: true };
+    return { img: await loadImg(item.img), filter: (wsStyleId && CUSTOM_FILTERS[wsStyleId]) || 'none', custom: true };
   }
-  return { img: await loadSvgImg(sliceSvg(item.build(getStyle(wsStyleId).pal, true)), w, h), filter: 'none', custom: false };
+  return { img: await loadSvgImg(sliceSvg(item.build(getCurrentStyle().pal, true)), w, h), filter: 'none', custom: false };
 }
 
 async function downloadArtwork() {
   if (!wsGenerated) { toast('请先点击「AI魔法生成」'); return; }
   const item = getWsItem();
-  const style = getStyle(wsStyleId);
+  const style = getCurrentStyle();
+  if (!style) { toast('无可用风格'); return; }
   const pal = style.pal;
   const lines = wsPoem.split('\n');
   const KAI = '"KaiTi","STKaiti","楷体",serif';

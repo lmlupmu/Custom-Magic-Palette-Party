@@ -655,6 +655,12 @@ main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 60px; }
 
 /* 风格卡 & 魔法按钮 */
 .style-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
+.style-hint {
+  background: var(--green-mist); border-radius: 10px; padding: 10px 12px;
+  font-size: 12px; line-height: 1.7; color: var(--green-deep); letter-spacing: .5px;
+  border: 1px dashed var(--green-soft);
+}
+.style-hint strong { color: var(--green-deep); }
 .style-card {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   background: #fff; border-radius: 12px; padding: 10px 14px;

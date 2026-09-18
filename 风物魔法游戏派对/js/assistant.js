@@ -467,6 +467,10 @@ const Assistant = (() => {
         }
         break;
       case 'sendChatMessage':
+        if (args.prompt) {
+          const input = document.getElementById('chatInput');
+          if (input) input.value = args.prompt;
+        }
         sendChatMessage();
         return { success: true, message: '智能体正在协作创作（诗人→画师→评论家），请稍等片刻～' };
       case 'downloadArtwork':
