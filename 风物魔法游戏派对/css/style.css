@@ -955,11 +955,24 @@ main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 60px; }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
+/* 手机端安全区域：iOS 刘海/Home Indicator 适配 */
+@supports (padding: max(0px)) {
+  @media (max-width: 640px) {
+    .topnav { padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); padding-top: max(10px, env(safe-area-inset-top)); }
+    main { padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); padding-bottom: max(40px, env(safe-area-inset-bottom)); }
+    .chat-input-area { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+    .as-avatar-btn { right: max(10px, env(safe-area-inset-right)); bottom: max(10px, env(safe-area-inset-bottom)); }
+    .as-window { right: max(6px, env(safe-area-inset-right)); bottom: max(6px, env(safe-area-inset-bottom)); left: max(6px, env(safe-area-inset-left)); }
+    .toast { bottom: calc(64px + env(safe-area-inset-bottom)); }
+  }
+}
+
 /* ---------- 响应式 ---------- */
+/* 平板：工坊切单列堆叠 */
 @media (max-width: 980px) {
-  .workshop { grid-template-columns: 1fr; }
+  .workshop { grid-template-columns: 1fr; gap: 14px; }
   .ws-chat { height: auto; min-height: 0; }
-  .chat-stream { max-height: 50vh; }
+  .chat-stream { max-height: 56vh; }
   .ws-gallery, .ws-controls { position: static; }
   .gallery-grid { grid-template-columns: repeat(3, 1fr); max-height: none; }
   .hero-title { font-size: 42px; letter-spacing: 6px; }
@@ -983,6 +996,182 @@ main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 60px; }
   .as-bubble { font-size: 15px; padding: 11px 14px; }
   .as-msg-avatar { width: 34px; height: 34px; }
   .as-listen-hint { font-size: 14px; bottom: 72px; }
+}
+
+/* 手机：导航紧凑 / hero缩小 / 工坊顺序调整 / 卡片3列 */
+@media (max-width: 640px) {
+  /* 顶部导航：品牌名隐藏，只留印章 */
+  .topnav { padding: 10px 14px; }
+  .brand-name { display: none; }
+  .brand-seal { font-size: 14px; padding: 5px 9px; }
+  .nav-tabs { gap: 2px; }
+  .nav-btn { font-size: 13px; letter-spacing: 1px; padding: 7px 11px; }
+  .sound-btn { width: 32px; height: 32px; }
+
+  /* 主体内边距收紧 */
+  main { padding: 18px 14px 40px; }
+
+  /* 首页 hero */
+  .hero { padding: 44px 12px 36px; }
+  .hero-tag { font-size: 11px; letter-spacing: 2px; padding: 4px 12px; margin-bottom: 16px; }
+  .hero-title { font-size: 32px; letter-spacing: 4px; text-shadow: 2px 2px 0 rgba(127, 191, 168, .35); }
+  .hero-sub { font-size: 16px; letter-spacing: 3px; margin-top: 8px; }
+  .hero-intro { margin: 18px auto 22px; font-size: 14px; line-height: 1.85; }
+  .hero-chips { margin-top: 18px; gap: 8px; }
+  .chip { font-size: 12px; padding: 5px 12px; letter-spacing: 1px; }
+  .hero-deco { display: none; } /* 装饰元素在小屏隐藏避免遮挡 */
+
+  /* 流程卡 */
+  .home-flow { gap: 12px; margin-top: 22px; }
+  .flow-card { flex: 1 1 100%; min-width: 0; max-width: none; padding: 20px 18px; }
+  .flow-num { width: 40px; height: 40px; font-size: 18px; margin-bottom: 10px; }
+  .flow-card h3 { font-size: 16px; letter-spacing: 2px; margin-bottom: 6px; }
+  .flow-card p { font-size: 13px; line-height: 1.75; }
+
+  /* 消除关卡卡片 */
+  .level-grid { grid-template-columns: 1fr; gap: 14px; }
+  .level-card { padding: 22px 18px 18px; }
+  .level-num { width: 48px; height: 48px; font-size: 22px; margin-bottom: 10px; }
+  .level-card h3 { font-size: 17px; }
+  .level-card p { font-size: 13px; line-height: 1.7; }
+  .game-status { gap: 8px; margin-bottom: 14px; }
+  .game-level-name { font-size: 17px; letter-spacing: 2px; }
+  .game-progress { font-size: 14px; }
+  .board { gap: 10px; }
+  .card { border-width: 1.5px; border-radius: 12px; padding: 6px; }
+  .card-name { font-size: 12px; letter-spacing: 1px; margin-top: 2px; }
+  .btn-big { font-size: 17px; padding: 13px 32px; letter-spacing: 2px; }
+
+  /* 工坊：聊天优先，画廊下沉到底部 */
+  .workshop { display: flex; flex-direction: column; gap: 14px; }
+  .ws-gallery { order: 3; }     /* 画廊移到最后，让用户先看到聊天 */
+  .ws-chat { order: 1; min-height: 70vh; }
+  .ws-controls { order: 2; }
+  .chat-stream { max-height: 50vh; min-height: 200px; }
+
+  /* 工作台工具条：分组纵向 */
+  .wb-bar { gap: 6px; }
+  .wb-group + .wb-group { padding-left: 0; border-left: none; }
+  .wb-group { flex-wrap: wrap; gap: 4px; }
+  .wb-download { padding: 5px 14px; font-size: 12px; letter-spacing: 1px; }
+  .wb-ghost { padding: 5px 12px; font-size: 11px; }
+  .mode-btn, .tpl-chip, .res-chip { font-size: 11px; padding: 4px 10px; }
+  .preview-result .postcard { max-width: 100%; }
+  .preview-result .teabox { max-width: 280px; }
+
+  /* 画廊：2列更易点 */
+  .gallery-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .g-cell { padding: 8px 4px 6px; border-radius: 12px; }
+  .g-cell span { font-size: 12px; letter-spacing: 1px; }
+  .g-rename { font-size: 11px !important; padding: 2px 8px !important; }
+
+  /* 风格列表 */
+  .style-list { gap: 8px; margin-bottom: 16px; }
+  .style-card { padding: 9px 10px; }
+  .style-info strong { font-size: 14px; }
+  .style-info small { font-size: 11px; }
+  .style-dots i { width: 12px; height: 12px; }
+
+  /* 聊天消息 */
+  .chat-msg { gap: 7px; }
+  .chat-avatar { width: 26px; height: 26px; font-size: 14px; }
+  .chat-bubble { font-size: 14px; padding: 9px 12px; max-width: 80%; }
+
+  /* 智能体步骤 */
+  .agent-step { padding: 9px 10px; }
+  .agent-step .agent-icon { width: 24px; height: 24px; font-size: 12px; }
+  .agent-step .agent-name { font-size: 11px; letter-spacing: 1px; }
+  .agent-step .agent-msg { font-size: 12px; line-height: 1.6; }
+  .agent-step .agent-result { padding: 8px 10px; margin-top: 6px; }
+  .agent-step .agent-result .poem-text { font-size: 14px; letter-spacing: 2px; line-height: 2; }
+  .agent-step .agent-result img { max-width: 160px; max-height: 160px; }
+
+  /* 作品卡 */
+  .work-card { padding: 14px 14px 12px; border-radius: 12px; }
+  .work-card .work-title { font-size: 16px; letter-spacing: 4px; }
+  .work-card .work-poem { padding: 10px 12px; font-size: 14px; letter-spacing: 3px; line-height: 2; }
+  .work-card .work-critique { font-size: 12px; line-height: 1.7; }
+
+  /* 输入区 */
+  .chat-input-area { padding: 8px 10px 10px; gap: 6px; }
+  .tool-chips { gap: 4px; }
+  .tool-chip { padding: 3px 8px; font-size: 11px; letter-spacing: .5px; }
+  .chat-input-row { padding: 5px 5px 5px 10px; gap: 6px; border-radius: 12px; }
+  .chat-input { font-size: 14px; min-height: 36px; }
+  .chat-send { min-width: 58px; height: 36px; font-size: 13px; letter-spacing: 2px; padding: 0 12px; border-radius: 9px; }
+
+  /* 历史列表 */
+  .history-list { gap: 6px; max-height: 38vh; }
+  .history-item { padding: 6px 8px; }
+  .history-thumb { width: 34px; height: 34px; }
+  .history-info { font-size: 12px; }
+
+  /* 关于 */
+  .about-grid { gap: 14px; }
+  .about-card { padding: 18px 16px; border-radius: 14px; }
+  .about-card h3 { font-size: 17px; letter-spacing: 3px; }
+  .about-card p { font-size: 14px; line-height: 1.85; }
+  .about-highlight { font-size: 18px !important; }
+  .about-foot { font-size: 14px; letter-spacing: 3px; margin-top: 24px; }
+
+  /* 弹窗 */
+  .modal { padding: 22px 18px; border-radius: 16px; }
+  .modal h3 { font-size: 19px; letter-spacing: 2px; }
+  .modal-badge { font-size: 11px; padding: 2px 10px; }
+  .win-unlocks { gap: 12px; margin: 14px 0; }
+  .unlock-art { padding: 8px 12px 6px; }
+  .unlock-svg svg { width: 90px; height: 90px; }
+  .unlock-art p { font-size: 12px; }
+  .modal-sm { max-width: 320px; }
+  .modal-compare { max-width: 100%; }
+  .compare-img { max-width: 100%; }
+  .modal-btns { gap: 10px; margin-top: 16px; }
+  .modal-btns .btn-primary, .modal-btns .btn-ghost { font-size: 14px; padding: 9px 18px; letter-spacing: 1px; }
+
+  /* 输入弹窗 */
+  .input-modal-title { font-size: 17px; letter-spacing: 2px; }
+  .input-modal-tip { font-size: 13px; margin: 8px 0 12px; }
+  .input-modal-field { font-size: 15px; padding: 9px 12px; }
+
+  /* 助手 */
+  .as-window { right: 6px; bottom: 6px; left: 6px; height: 80vh; border-radius: 12px; }
+  .as-avatar-btn { right: 10px; bottom: 10px; width: 52px; height: 52px; font-size: 22px; }
+  .as-mic-btn { width: 50px; height: 50px; font-size: 22px; }
+  .as-bubble { font-size: 13px; padding: 9px 12px; max-width: 72%; }
+  .as-msg { max-width: 90%; }
+  .as-msg-avatar { width: 30px; height: 30px; }
+  .as-listen-hint { font-size: 12px; bottom: 66px; }
+  .as-header { padding: 10px 12px; }
+  .as-header-name { font-size: 14px; letter-spacing: 1px; }
+  .as-header-status { font-size: 11px; }
+  .as-header-btn { width: 28px; height: 28px; font-size: 14px; }
+
+  /* 页脚 */
+  .site-foot { padding: 14px; font-size: 11px; letter-spacing: 1px; }
+
+  /* 提示条 */
+  .toast { font-size: 13px; padding: 8px 14px; bottom: 64px; }
+
+  /* 礼盒/明信片 SVG 字号自适应 */
+  .tbl-name { font-size: clamp(13px, 4vw, 21px); }
+  .tbl-poem { font-size: clamp(9px, 2.6vw, 14px); }
+}
+
+/* 小手机：进一步紧凑 */
+@media (max-width: 380px) {
+  .topnav { padding: 8px 10px; }
+  .nav-btn { font-size: 12px; padding: 6px 8px; letter-spacing: .5px; }
+  .hero-title { font-size: 26px; letter-spacing: 3px; }
+  .hero-sub { font-size: 14px; }
+  .hero-intro { font-size: 13px; }
+  .gallery-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .g-cell { padding: 6px 4px 4px; }
+  .g-cell span { font-size: 11px; }
+  .chat-stream { max-height: 40vh; }
+  .chat-bubble { font-size: 13px; max-width: 84%; }
+  .work-card .work-title { font-size: 14px; letter-spacing: 3px; }
+  .chat-send { min-width: 52px; font-size: 12px; padding: 0 10px; }
+  .level-card { padding: 18px 14px 14px; }
 }
 
 /* ---------- 智能体图标 spin 动画（running 状态） ---------- */

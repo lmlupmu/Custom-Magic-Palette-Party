@@ -3,7 +3,7 @@
  * 版本升级时修改 CACHE_VERSION 即可让旧缓存失效
  * ===================================================== */
 
-const CACHE_VERSION = 'fengwu-party-v19';
+const CACHE_VERSION = 'fengwu-party-v20';
 
 /* 预缓存清单：应用外壳全部静态资源 */
 const PRECACHE = [
